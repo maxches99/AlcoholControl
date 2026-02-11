@@ -65,6 +65,7 @@ struct TodayView: View {
     @State private var activeSheet: TodaySheet?
     @State private var showEmergencyConfirm = false
     @State private var showGlossaryTooltip = false
+    @State private var activeTermHint: TermHintOverlayState?
     @State private var infoMessage: String?
     @State private var healthSleepHours: Double?
     @State private var healthStepCount: Int?
@@ -171,6 +172,7 @@ struct TodayView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
+                        activeTermHint = nil
                         withAnimation(.easeInOut(duration: 0.18)) {
                             showGlossaryTooltip.toggle()
                         }
@@ -239,18 +241,7 @@ struct TodayView: View {
                     SafetyCenterView()
                 }
             }
-            .overlay {
-                if showGlossaryTooltip {
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                showGlossaryTooltip = false
-                            }
-                        }
-                }
-            }
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .topLeading) {
                 if showGlossaryTooltip {
                     GlossaryTooltipView {
                         withAnimation(.easeInOut(duration: 0.18)) {
@@ -259,9 +250,23 @@ struct TodayView: View {
                         activeSheet = .glossary
                     }
                     .padding(.top, 8)
-                    .padding(.trailing, 12)
-                    .transition(.scale(scale: 0.96, anchor: .topTrailing).combined(with: .opacity))
+                    .padding(.leading, 12)
+                    .transition(.scale(scale: 0.96, anchor: .topLeading).combined(with: .opacity))
                     .zIndex(3)
+                }
+            }
+            .overlayPreferenceValue(TermHintAnchorPreferenceKey.self) { anchors in
+                GeometryReader { proxy in
+                    if let activeTermHint, let anchor = anchors[activeTermHint.id] {
+                        let sourceRect = proxy[anchor]
+                        let x = termHintX(for: sourceRect, containerWidth: proxy.size.width)
+                        TermHintOverlayCard(hint: activeTermHint) {
+                            self.activeTermHint = nil
+                        }
+                        .offset(x: x, y: sourceRect.maxY + 8)
+                        .transition(.scale(scale: 0.96, anchor: .topTrailing).combined(with: .opacity))
+                        .zIndex(4)
+                    }
                 }
             }
             .alert("Экстренная помощь", isPresented: $showEmergencyConfirm) {
@@ -287,6 +292,16 @@ struct TodayView: View {
                 guard let id = newValue else { return }
                 activeSheet = .forecast(id)
                 appState.pendingForecastSessionID = nil
+            }
+            .onChange(of: activeTermHint) { _, newValue in
+                if newValue != nil {
+                    showGlossaryTooltip = false
+                }
+            }
+            .onChange(of: showGlossaryTooltip) { _, isPresented in
+                if isPresented {
+                    activeTermHint = nil
+                }
             }
         }
     }
@@ -346,6 +361,7 @@ struct TodayView: View {
                     scenarios: scenarios,
                     projections: projections,
                     onOpenGlossary: {
+                        activeTermHint = nil
                         showGlossaryTooltip = true
                     },
                     onOpenForecast: {
@@ -600,7 +616,8 @@ struct TodayView: View {
                             .foregroundStyle(.secondary)
                         TermHintBadge(
                             term: "BAC",
-                            definition: "Оценка концентрации алкоголя в крови по модели, а не медицинское измерение."
+                            definition: "Оценка концентрации алкоголя в крови по модели, а не медицинское измерение.",
+                            activeHint: $activeTermHint
                         )
                     }
                     Text(String(format: "%.3f", currentBAC))
@@ -614,7 +631,8 @@ struct TodayView: View {
                             .foregroundStyle(.secondary)
                         TermHintBadge(
                             term: "До ~0.00",
-                            definition: "Примерное время, когда BAC по модели снизится до нуля."
+                            definition: "Примерное время, когда BAC по модели снизится до нуля.",
+                            activeHint: $activeTermHint
                         )
                     }
                     Text(soberText(for: soberAt).replacingOccurrences(of: "До ~0.00: ", with: ""))
@@ -673,6 +691,14 @@ struct TodayView: View {
         }
     }
 
+    private func termHintX(for sourceRect: CGRect, containerWidth: CGFloat) -> CGFloat {
+        let tooltipWidth: CGFloat = 260
+        let horizontalPadding: CGFloat = 12
+        let preferredX = sourceRect.maxX - tooltipWidth
+        let maxX = containerWidth - tooltipWidth - horizontalPadding
+        return min(max(horizontalPadding, preferredX), max(horizontalPadding, maxX))
+    }
+
     private func hydrationSummaryCard(_ waterBalance: WaterBalanceSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -681,7 +707,8 @@ struct TodayView: View {
                         .font(.headline)
                     TermHintBadge(
                         term: "Водный баланс",
-                        definition: "Сравнение выпитой воды с ориентиром для текущей сессии."
+                        definition: "Сравнение выпитой воды с ориентиром для текущей сессии.",
+                        activeHint: $activeTermHint
                     )
                 }
                 Spacer()

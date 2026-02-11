@@ -629,17 +629,6 @@ struct ForecastView: View {
                 .accessibilityLabel("Подсказки по терминам")
             }
         }
-        .overlay {
-            if showGlossaryTooltip {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            showGlossaryTooltip = false
-                        }
-                    }
-            }
-        }
         .overlay(alignment: .topTrailing) {
             if showGlossaryTooltip {
                 GlossaryTooltipView {

@@ -1,63 +1,86 @@
 import SwiftUI
 
+struct TermHintOverlayState: Equatable, Identifiable {
+    let id: String
+    let term: String
+    let definition: String
+}
+
+struct TermHintAnchorPreferenceKey: PreferenceKey {
+    static var defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
 struct TermHintBadge: View {
     let term: String
     let definition: String
+    @Binding var activeHint: TermHintOverlayState?
 
-    @State private var showingHint = false
-    @State private var autoHideTask: Task<Void, Never>?
+    private var hintID: String { "\(term)|\(definition)" }
+    private var isActive: Bool { activeHint?.id == hintID }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    showingHint.toggle()
-                }
-                if showingHint {
-                    scheduleAutoHide()
+        Button {
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.92)) {
+                if isActive {
+                    activeHint = nil
                 } else {
-                    autoHideTask?.cancel()
+                    activeHint = TermHintOverlayState(id: hintID, term: term, definition: definition)
                 }
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.format("Подсказка: %@", term))
+        } label: {
+            Image(systemName: isActive ? "questionmark.circle.fill" : "questionmark.circle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 28)
+                .background(isActive ? Color.accentColor.opacity(0.14) : .clear, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.format("Подсказка: %@", term))
+        .anchorPreference(key: TermHintAnchorPreferenceKey.self, value: .bounds) { [hintID: $0] }
+    }
+}
 
-            if showingHint {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(term)
-                        .font(.headline)
-                    Text(definition)
-                        .font(.footnote)
+struct TermHintOverlayCard: View {
+    let hint: TermHintOverlayState
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(hint.term)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        onClose()
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(10)
-                .frame(width: 230, alignment: .leading)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 8, y: 4)
-                .offset(x: -8, y: 28)
-                .transition(.scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity))
-                .zIndex(2)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Закрыть подсказку")
             }
+            Text(hint.definition)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .onDisappear {
-            autoHideTask?.cancel()
-        }
-    }
-
-    private func scheduleAutoHide() {
-        autoHideTask?.cancel()
-        autoHideTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    showingHint = false
-                }
-            }
-        }
+        .padding(12)
+        .frame(width: 260, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(0.24))
+        )
+        .shadow(color: .black.opacity(0.16), radius: 14, y: 8)
     }
 }

@@ -28,7 +28,7 @@ struct GlossaryView: View {
                 term("Streak", "Серия сессий подряд, где вы держите полезную привычку, например воду или прием пищи.")
                 term("Тренд", "Направление изменения показателя по истории: улучшается, ухудшается или стабильно.")
             }
-            .navigationTitle("Подсказки терминов")
+            .navigationTitle("Термины и пояснения")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
@@ -52,36 +52,79 @@ struct GlossaryView: View {
 struct GlossaryTooltipView: View {
     var onOpenFullGlossary: (() -> Void)?
 
-    private let quickTerms: [(String, String)] = [
-        ("BAC (примерно)", "Оценка BAC по модели, а не мед. измерение."),
-        ("До ~0.00", "Примерное время, когда BAC по модели снизится до 0."),
-        ("Риск тяжелого утра", "Эвристика на базе BAC, темпа, воды и длительности."),
-        ("Риск провалов памяти", "Оценка вероятности фрагментарной памяти о части эпизодов.")
+    private let quickTerms: [(icon: String, title: String, description: String)] = [
+        (
+            "waveform.path.ecg",
+            "BAC (примерно)",
+            "Нужен для ориентира по динамике. Это модель, а не точное измерение."
+        ),
+        (
+            "clock",
+            "До ~0.00",
+            "Показывает примерное время, когда по расчёту BAC вернется к нулю."
+        ),
+        (
+            "sun.max.trianglebadge.exclamationmark",
+            "Риск тяжелого утра",
+            "Итоговая оценка по темпу, объему, воде и длительности сессии."
+        ),
+        (
+            "brain.head.profile",
+            "Риск провалов памяти",
+            "Вероятность того, что часть эпизодов запомнится хуже обычного."
+        )
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Подсказки терминов")
-                .font(.headline)
-            ForEach(quickTerms, id: \.0) { item in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.0)
-                        .font(.subheadline.weight(.semibold))
-                    Text(item.1)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Быстрые подсказки")
+                    .font(.headline)
+                Text("Короткие пояснения к ключевым метрикам.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(quickTerms, id: \.title) { item in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: item.icon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(item.title)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    Text(item.description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
+
             if let onOpenFullGlossary {
                 Divider()
-                Button("Открыть полный словарь") {
+                Button {
                     onOpenFullGlossary()
+                } label: {
+                    Label("Открыть полный словарь", systemImage: "text.book.closed")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         }
-        .padding(12)
-        .frame(width: 320, alignment: .leading)
+        .padding(14)
+        .frame(maxWidth: 320, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.24))
+        )
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
     }
 }
