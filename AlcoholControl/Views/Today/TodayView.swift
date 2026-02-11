@@ -52,7 +52,57 @@ private enum SessionEvent: Identifiable {
     }
 }
 
+private enum SessionLimitLevel {
+    case onTrack
+    case nearLimit
+    case exceeded
+
+    var title: String {
+        switch self {
+        case .onTrack:
+            return L10n.tr("В пределах лимита")
+        case .nearLimit:
+            return L10n.tr("Близко к лимиту")
+        case .exceeded:
+            return L10n.tr("Лимит превышен")
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .onTrack:
+            return L10n.tr("Темп пока в вашем плане, удерживайте воду и паузы.")
+        case .nearLimit:
+            return L10n.tr("Осталось мало запаса. Лучше перейти на более медленный темп и воду.")
+        case .exceeded:
+            return L10n.tr("Сейчас безопаснее остановить алкоголь и перейти к восстановлению.")
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .onTrack:
+            return .green
+        case .nearLimit:
+            return .orange
+        case .exceeded:
+            return .red
+        }
+    }
+}
+
+private struct SessionLimitState {
+    let level: SessionLimitLevel
+    let standardDrinks: Double
+    let goalStdDrinks: Double
+
+    var progress: Double {
+        min(1.4, standardDrinks / max(goalStdDrinks, 0.1))
+    }
+}
+
 struct TodayView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var appState: AppState
@@ -156,6 +206,16 @@ struct TodayView: View {
             return .cocktails
         case .cider, .seltzer, .liqueur, .other:
             return .light
+        }
+    }
+
+    private var oneTapPresets: [DrinkPresetModel] {
+        let targetCategories: [DrinkEntry.Category] = [.beer, .wine, .cocktail]
+        return targetCategories.compactMap { category in
+            if let recent = recentPresets.first(where: { $0.category == category }) {
+                return recent
+            }
+            return DrinkCatalog.defaults.first(where: { $0.category == category })
         }
     }
 
@@ -293,6 +353,10 @@ struct TodayView: View {
                 activeSheet = .forecast(id)
                 appState.pendingForecastSessionID = nil
             }
+            .onChange(of: scenePhase) { _, newValue in
+                guard newValue == .active else { return }
+                applyPendingWatchActionsIfNeeded()
+            }
             .onChange(of: activeTermHint) { _, newValue in
                 if newValue != nil {
                     showGlossaryTooltip = false
@@ -324,6 +388,7 @@ struct TodayView: View {
         let projections = insightService.memoryProjections(for: session, profile: profile, history: sessions)
         let standardDrinks = standardDrinksInSession(session)
         let consumedWaterMl = session.waters.compactMap(\.volumeMl).reduce(0, +)
+        let limitState = sessionLimitState(standardDrinks: standardDrinks)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -347,6 +412,8 @@ struct TodayView: View {
                     standardDrinks: standardDrinks,
                     consumedWaterMl: consumedWaterMl
                 )
+                sessionLimitCard(limitState)
+                oneTapDrinkCard(session: session)
                 eveningProcessCoachCard(
                     session: session,
                     insights: insights,
@@ -801,6 +868,109 @@ struct TodayView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
+    private func sessionLimitState(standardDrinks: Double) -> SessionLimitState {
+        let ratio = standardDrinks / max(goalStdDrinks, 0.1)
+        let level: SessionLimitLevel
+        if ratio >= 1 {
+            level = .exceeded
+        } else if ratio >= 0.75 {
+            level = .nearLimit
+        } else {
+            level = .onTrack
+        }
+        return SessionLimitState(
+            level: level,
+            standardDrinks: standardDrinks,
+            goalStdDrinks: max(goalStdDrinks, 0.1)
+        )
+    }
+
+    private func sessionLimitCard(_ state: SessionLimitState) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.tr("Личный лимит сессии"))
+                    .font(.headline)
+                Spacer()
+                Text(state.level.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(state.level.color)
+            }
+
+            Text(
+                L10n.format(
+                    "Сейчас %.1f из %.1f ст.др.",
+                    state.standardDrinks,
+                    state.goalStdDrinks
+                )
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            ProgressView(value: min(1, state.progress))
+                .tint(state.level.color)
+
+            Text(state.level.hint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if state.level != .onTrack {
+                Button(L10n.tr("Запланировать паузу 20 минут")) {
+                    Task {
+                        await NotificationService.shared.schedulePauseReminder(after: 20)
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(state.level.color.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func oneTapDrinkCard(session: Session) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.tr("One-tap лог"))
+                    .font(.headline)
+                Spacer()
+                Text(L10n.tr("Без открытия формы"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if oneTapPresets.isEmpty {
+                Text(L10n.tr("Добавьте первый напиток, и появятся быстрые пресеты."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(oneTapPresets) { preset in
+                        Button {
+                            saveOneTapPreset(preset, into: session)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(preset.category.label)
+                                    .font(.caption2.weight(.semibold))
+                                Text("\(Int(preset.volumeMl)) мл")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
     private func eveningProcessCoachCard(
         session: Session,
         insights: EveningInsightAssessment,
@@ -938,7 +1108,7 @@ struct TodayView: View {
 
     private func repeatLastDrink(into session: Session) {
         guard let last = latestDrinkTemplate else {
-            infoMessage = "Пока нет прошлых напитков для быстрого повтора."
+            infoMessage = L10n.tr("Пока нет прошлых напитков для быстрого повтора.")
             return
         }
 
@@ -952,7 +1122,25 @@ struct TodayView: View {
             title: last.title,
             category: last.category
         )
-        infoMessage = "Повторили: \((last.title ?? last.category.label).localized)"
+        infoMessage = L10n.format("Повторили: %@", (last.title ?? last.category.label).localized)
+    }
+
+    private func saveOneTapPreset(_ preset: DrinkPresetModel, into session: Session) {
+        sessionService.addDrink(
+            to: session,
+            context: context,
+            profile: profile,
+            createdAt: .now,
+            volumeMl: preset.volumeMl,
+            abvPercent: preset.abv,
+            title: preset.title,
+            category: preset.category
+        )
+        infoMessage = L10n.format("Быстро добавлено: %@", preset.category.label)
+        let assessment = insightService.assess(session: session, profile: profile)
+        Task {
+            await syncSmartReminder(sessionID: session.id, insights: assessment)
+        }
     }
 
     private func startSessionWithPlanContext() {
@@ -977,9 +1165,40 @@ struct TodayView: View {
     }
 
     private func applyPendingWatchActionsIfNeeded() {
-        guard let session = activeSession else { return }
-
+        let startRequested = WidgetSnapshotStore.consumePendingStartSessionRequest()
         let pendingMl = WidgetSnapshotStore.consumePendingWaterMl()
+        let pendingDrink = WidgetSnapshotStore.consumePendingDrink()
+        let pendingMealSize = WidgetSnapshotStore.consumePendingMealSize()
+        let endRequested = WidgetSnapshotStore.consumePendingEndSessionRequest()
+        let safetyRequested = WidgetSnapshotStore.consumePendingSafetyCheckRequest()
+        let pauseMinutes = WidgetSnapshotStore.consumePendingPauseRequest()
+
+        let needsActiveSession = startRequested || pendingMl > 0 || pendingDrink != nil || pendingMealSize != nil
+        if needsActiveSession, activeSession == nil {
+            do {
+                _ = try sessionService.startSession(context: context)
+                if startRequested {
+                    infoMessage = L10n.tr("С часов/виджета запрошен старт сессии")
+                }
+            } catch {
+                infoMessage = L10n.tr("Не удалось запустить сессию")
+            }
+        }
+
+        guard let session = activeSession else {
+            if safetyRequested {
+                activeSheet = .safetyCenter
+                infoMessage = L10n.tr("С часов пришел запрос открыть Safety Center")
+            }
+            if let pauseMinutes {
+                Task {
+                    await NotificationService.shared.schedulePauseReminder(after: pauseMinutes)
+                }
+                infoMessage = L10n.format("Напоминание о паузе на %d мин запущено", pauseMinutes)
+            }
+            return
+        }
+
         if pendingMl > 0 {
             sessionService.addWater(
                 to: session,
@@ -990,7 +1209,7 @@ struct TodayView: View {
             infoMessage = L10n.format("Добавлено с часов: +%d мл воды", pendingMl)
         }
 
-        if let pendingDrink = WidgetSnapshotStore.consumePendingDrink() {
+        if let pendingDrink {
             sessionService.addDrink(
                 to: session,
                 context: context,
@@ -1004,7 +1223,7 @@ struct TodayView: View {
             infoMessage = L10n.format("Добавлено с часов: %@", pendingDrink.title)
         }
 
-        if let mealSize = WidgetSnapshotStore.consumePendingMealSize() {
+        if let mealSize = pendingMealSize {
             sessionService.addMeal(
                 to: session,
                 context: context,
@@ -1016,17 +1235,17 @@ struct TodayView: View {
             infoMessage = L10n.format("Добавлено с часов: %@", mealSize.label)
         }
 
-        if WidgetSnapshotStore.consumePendingEndSessionRequest() {
+        if endRequested {
             activeSheet = .endSession(session.id)
             infoMessage = L10n.tr("На часах запрошено завершение сессии")
         }
 
-        if WidgetSnapshotStore.consumePendingSafetyCheckRequest() {
+        if safetyRequested {
             activeSheet = .safetyCenter
             infoMessage = L10n.tr("С часов пришел запрос открыть Safety Center")
         }
 
-        if let pauseMinutes = WidgetSnapshotStore.consumePendingPauseRequest() {
+        if let pauseMinutes {
             Task {
                 await NotificationService.shared.schedulePauseReminder(after: pauseMinutes)
             }
@@ -1091,9 +1310,19 @@ struct TodayView: View {
     }
 
     private func syncSmartReminder(sessionID: UUID, insights: EveningInsightAssessment) async {
-        guard profile?.notificationsEnabled == true else { return }
+        guard profile?.notificationsEnabled == true else {
+            NotificationService.shared.cancelHydrationNudge()
+            NotificationService.shared.cancelSmartRiskNudge()
+            NotificationService.shared.cancelWellbeingCheck()
+            return
+        }
         let status = await NotificationService.shared.authorizationStatus()
-        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+        guard status == .authorized || status == .provisional || status == .ephemeral else {
+            NotificationService.shared.cancelHydrationNudge()
+            NotificationService.shared.cancelSmartRiskNudge()
+            NotificationService.shared.cancelWellbeingCheck()
+            return
+        }
 
         await NotificationService.shared.scheduleHydrationNudge(
             for: sessionID,
@@ -1106,6 +1335,12 @@ struct TodayView: View {
             morningRisk: insights.morningRisk,
             memoryRisk: insights.memoryRisk,
             waterDeficitMl: insights.waterBalance.deficitMl
+        )
+
+        await NotificationService.shared.scheduleWellbeingCheck(
+            for: sessionID,
+            morningRisk: insights.morningRisk,
+            memoryRisk: insights.memoryRisk
         )
     }
 
@@ -2075,6 +2310,7 @@ private struct EndSessionSheet: View {
             await NotificationService.shared.cancelWaterReminders()
             NotificationService.shared.cancelHydrationNudge()
             NotificationService.shared.cancelSmartRiskNudge()
+            NotificationService.shared.cancelWellbeingCheck()
             _ = await LiveSessionActivityService.shared.end(sessionID: session.id)
             WidgetSnapshotStore.clear()
             guard profile?.notificationsEnabled == true else { return }

@@ -119,7 +119,7 @@ struct PaywallView: View {
     }
 
     private func restore() async {
-        await purchase.restore()
+        await purchase.restoreFromAppStore()
         if purchase.isPremium {
             statusMessage = L10n.tr("Покупки восстановлены")
             dismiss()

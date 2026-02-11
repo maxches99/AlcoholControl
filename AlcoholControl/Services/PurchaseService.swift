@@ -12,7 +12,11 @@ final class PurchaseService: ObservableObject {
     @Published var isLoadingProducts = false
     @Published var selectedProductID = "com.alcoholcontrol.premium.monthly"
 
-    private init() {}
+    private var transactionUpdatesTask: Task<Void, Never>?
+
+    private init() {
+        observeTransactionUpdates()
+    }
 
     private var productIDs: [String] {
         [monthlyID, yearlyID]
@@ -57,8 +61,8 @@ final class PurchaseService: ObservableObject {
                 switch verification {
                 case .verified(let transaction):
                     await transaction.finish()
-                    isPremium = true
-                    return true
+                    await refreshPremiumStatus()
+                    return isPremium
                 case .unverified:
                     return false
                 }
@@ -72,14 +76,21 @@ final class PurchaseService: ObservableObject {
         }
     }
 
-    func restore() async {
-        var hasPremium = false
-        for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result, productIDs.contains(transaction.productID) {
-                hasPremium = true
-            }
+    @discardableResult
+    func restore() async -> Bool {
+        await refreshPremiumStatus()
+        return isPremium
+    }
+
+    @discardableResult
+    func restoreFromAppStore() async -> Bool {
+        do {
+            try await AppStore.sync()
+        } catch {
+            // Even if sync fails (e.g. no network), still recalculate local entitlements.
         }
-        isPremium = hasPremium
+        await refreshPremiumStatus()
+        return isPremium
     }
 
     private func order(for productID: String) -> Int {
@@ -91,5 +102,33 @@ final class PurchaseService: ObservableObject {
         default:
             return 2
         }
+    }
+
+    private func observeTransactionUpdates() {
+        transactionUpdatesTask?.cancel()
+        transactionUpdatesTask = Task { [weak self] in
+            guard let self else { return }
+            for await result in Transaction.updates {
+                if case .verified(let transaction) = result {
+                    await transaction.finish()
+                }
+                await self.refreshPremiumStatus()
+            }
+        }
+    }
+
+    private func refreshPremiumStatus() async {
+        var hasPremium = false
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result else { continue }
+            guard productIDs.contains(transaction.productID) else { continue }
+            guard transaction.revocationDate == nil else { continue }
+            if let expirationDate = transaction.expirationDate, expirationDate < Date() {
+                continue
+            }
+            hasPremium = true
+            break
+        }
+        isPremium = hasPremium
     }
 }

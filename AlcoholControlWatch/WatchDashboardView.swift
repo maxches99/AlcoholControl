@@ -19,6 +19,7 @@ private enum WatchKeys {
     static let pendingDrinkCategory = "watch.pendingDrink.category"
     static let pendingMealSize = "watch.pendingMeal.size"
     static let pendingEndSession = "watch.pendingEndSession"
+    static let pendingStartSession = "watch.pendingStartSession"
     static let pendingSafetyCheck = "watch.pendingSafetyCheck"
     static let pendingPauseMinutes = "watch.pendingPauseMinutes"
 }
@@ -89,6 +90,13 @@ final class WatchSnapshotStore: ObservableObject {
         defaults.set(true, forKey: WatchKeys.pendingEndSession)
         defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
         statusMessage = "Запросили завершение на iPhone"
+    }
+
+    func requestStartSession() {
+        guard let defaults else { return }
+        defaults.set(true, forKey: WatchKeys.pendingStartSession)
+        defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
+        statusMessage = "Запросили старт сессии на iPhone"
     }
 
     func addQuickMeal() {
@@ -178,11 +186,16 @@ struct WatchDashboardView: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("Коктейль") {
-                            store.addDrinkQuick(volumeMl: 180, abv: 18, title: "Cocktail", category: "cocktail")
+                        Button("Вино 150") {
+                            store.addDrinkQuick(volumeMl: 150, abv: 12, title: "Wine", category: "wine")
                         }
                         .buttonStyle(.bordered)
                     }
+
+                    Button("Коктейль") {
+                        store.addDrinkQuick(volumeMl: 180, abv: 18, title: "Cocktail", category: "cocktail")
+                    }
+                    .buttonStyle(.bordered)
 
                     HStack(spacing: 8) {
                         Button("+ Перекус") {
@@ -208,6 +221,11 @@ struct WatchDashboardView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.orange)
+                } else {
+                    Button("Старт сессии") {
+                        store.requestStartSession()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
 
                 if !store.statusMessage.isEmpty {

@@ -25,6 +25,7 @@ enum WidgetSnapshotStore {
         static let pendingDrinkCategory = "watch.pendingDrink.category"
         static let pendingMealSize = "watch.pendingMeal.size"
         static let pendingEndSession = "watch.pendingEndSession"
+        static let pendingStartSession = "watch.pendingStartSession"
         static let pendingSafetyCheck = "watch.pendingSafetyCheck"
         static let pendingPauseMinutes = "watch.pendingPauseMinutes"
     }
@@ -132,11 +133,26 @@ enum WidgetSnapshotStore {
         defaults.set(Date.now.timeIntervalSince1970, forKey: Key.updatedAt)
     }
 
+    static func requestStartSessionFromWatch() {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        defaults.set(true, forKey: Key.pendingStartSession)
+        defaults.set(Date.now.timeIntervalSince1970, forKey: Key.updatedAt)
+    }
+
     static func consumePendingEndSessionRequest() -> Bool {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return false }
         let requested = defaults.bool(forKey: Key.pendingEndSession)
         if requested {
             defaults.set(false, forKey: Key.pendingEndSession)
+        }
+        return requested
+    }
+
+    static func consumePendingStartSessionRequest() -> Bool {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return false }
+        let requested = defaults.bool(forKey: Key.pendingStartSession)
+        if requested {
+            defaults.set(false, forKey: Key.pendingStartSession)
         }
         return requested
     }

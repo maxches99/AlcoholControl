@@ -10,6 +10,7 @@ final class NotificationService {
         static let hydrationNudge = "water.hydration.nudge"
         static let smartRiskNudge = "session.smart.risk.nudge"
         static let pauseReminder = "session.pause.nudge"
+        static let wellbeingCheck = "session.wellbeing.check"
     }
 
     enum Payload {
@@ -127,6 +128,32 @@ final class NotificationService {
         try? await add(request)
     }
 
+    func scheduleWellbeingCheck(
+        for sessionID: UUID,
+        morningRisk: InsightLevel,
+        memoryRisk: InsightLevel
+    ) async {
+        cancelWellbeingCheck()
+        guard morningRisk != .low || memoryRisk != .low else { return }
+
+        let delay: TimeInterval
+        if memoryRisk == .high || morningRisk == .high {
+            delay = 10 * 60
+        } else {
+            delay = 16 * 60
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = L10n.tr("Проверка самочувствия")
+        content.body = wellbeingBody(morningRisk: morningRisk, memoryRisk: memoryRisk)
+        content.sound = .default
+        content.userInfo[Payload.sessionID] = sessionID.uuidString
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+        let request = UNNotificationRequest(identifier: Identifier.wellbeingCheck, content: content, trigger: trigger)
+        try? await add(request)
+    }
+
     func cancelWaterReminders() async {
         await clearRequests(withPrefix: Identifier.waterPrefix)
     }
@@ -145,6 +172,10 @@ final class NotificationService {
 
     func cancelSmartRiskNudge() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Identifier.smartRiskNudge])
+    }
+
+    func cancelWellbeingCheck() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Identifier.wellbeingCheck])
     }
 
     func schedulePauseReminder(after minutes: Int = 25) async {
@@ -169,6 +200,16 @@ final class NotificationService {
             return L10n.format("Сейчас полезно добрать воду: еще около %d мл.", waterDeficitMl)
         }
         return L10n.tr("Сделайте короткую паузу и оцените самочувствие.")
+    }
+
+    private func wellbeingBody(morningRisk: InsightLevel, memoryRisk: InsightLevel) -> String {
+        if memoryRisk == .high {
+            return L10n.tr("Сделайте минутную самопроверку: вода, пауза и спокойный темп сейчас особенно важны.")
+        }
+        if morningRisk == .high {
+            return L10n.tr("Проверьте самочувствие и темп. Лучше добавить воду и сделать паузу.")
+        }
+        return L10n.tr("Короткая проверка состояния: как самочувствие, вода и темп?")
     }
 
     private func reminderTimes(intervalMinutes: Int, quietHours: (start: Int, end: Int)?) -> [(hour: Int, minute: Int)] {

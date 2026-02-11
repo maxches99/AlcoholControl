@@ -208,7 +208,7 @@ struct SettingsView: View {
                         showPaywall = true
                     }
                     Button("Restore purchases") {
-                        Task { await purchase.restore() }
+                        Task { await purchase.restoreFromAppStore() }
                     }
                 }
 

@@ -43,17 +43,40 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if url.host == "quick" {
             let action = url.lastPathComponent
             switch action {
+            case "start":
+                WidgetSnapshotStore.requestStartSessionFromWatch()
+            case "stop":
+                WidgetSnapshotStore.requestEndSessionFromWatch()
             case "water":
                 WidgetSnapshotStore.enqueuePendingWater(volumeMl: 250)
             case "meal":
                 WidgetSnapshotStore.enqueuePendingMeal(size: .snack)
+            case "beer":
+                WidgetSnapshotStore.enqueuePendingDrink(
+                    volumeMl: 330,
+                    abvPercent: 5,
+                    title: L10n.tr("Пиво 330"),
+                    category: .beer
+                )
+            case "cocktail":
+                WidgetSnapshotStore.enqueuePendingDrink(
+                    volumeMl: 180,
+                    abvPercent: 18,
+                    title: L10n.tr("Коктейль"),
+                    category: .cocktail
+                )
             case "pause":
                 WidgetSnapshotStore.enqueuePauseRequest(minutes: 25)
+            case "checkin":
+                Task { @MainActor in
+                    appState?.openMorningCheckIn(sessionID: nil)
+                }
+                return true
             default:
                 break
             }
             Task { @MainActor in
-                appState?.openMorningCheckIn(sessionID: nil)
+                appState?.openToday()
             }
             return true
         }

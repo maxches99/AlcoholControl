@@ -15,19 +15,24 @@ final class AppState: ObservableObject {
     @Published var pendingOpenLatestMorningCheckIn = false
     @Published var pendingForecastSessionID: UUID?
 
-    func openMorningCheckIn(sessionID: UUID?) {
+    func openToday() {
         selectedTab = .today
+        pendingMorningCheckInSessionID = nil
+        pendingOpenLatestMorningCheckIn = false
+        pendingForecastSessionID = nil
+    }
+
+    func openMorningCheckIn(sessionID: UUID?) {
+        openToday()
         if let sessionID {
             pendingMorningCheckInSessionID = sessionID
-            pendingOpenLatestMorningCheckIn = false
         } else {
-            pendingMorningCheckInSessionID = nil
             pendingOpenLatestMorningCheckIn = true
         }
     }
 
     func openForecast(sessionID: UUID) {
-        selectedTab = .today
+        openToday()
         pendingForecastSessionID = sessionID
     }
 }

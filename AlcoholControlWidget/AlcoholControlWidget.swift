@@ -232,8 +232,13 @@ private struct AlcoholControlWidgetEntryView: View {
 
                 HStack(spacing: 8) {
                     quickActionLink(title: "Вода", url: "alcoholcontrol://quick/water")
-                    quickActionLink(title: "Еда", url: "alcoholcontrol://quick/meal")
+                    quickActionLink(title: "Пиво", url: "alcoholcontrol://quick/beer")
+                    quickActionLink(title: "Коктейль", url: "alcoholcontrol://quick/cocktail")
                     quickActionLink(title: "Пауза", url: "alcoholcontrol://quick/pause")
+                }
+                HStack(spacing: 8) {
+                    quickActionLink(title: "Стоп", url: "alcoholcontrol://quick/stop")
+                    quickActionLink(title: "Чек-ин", url: "alcoholcontrol://quick/checkin")
                 }
             } else {
                 Text("Нет активной сессии")
@@ -241,6 +246,10 @@ private struct AlcoholControlWidgetEntryView: View {
                 Text("Откройте приложение, чтобы начать вечер.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    quickActionLink(title: "Старт", url: "alcoholcontrol://quick/start")
+                    quickActionLink(title: "Чек-ин", url: "alcoholcontrol://quick/checkin")
+                }
             }
         }
         .padding(12)
