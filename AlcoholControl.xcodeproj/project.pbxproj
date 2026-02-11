@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2DE6620B2F3CA8A500A1807A /* AlcoholControlWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2DE6621D2F3CA8A500A1807A /* AlcoholControlWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		2DE6612D2F3CA8A700A1807A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +25,35 @@
 			remoteGlobalIDString = 2DE6611C2F3CA8A500A1807A;
 			remoteInfo = AlcoholControl;
 		};
+		2DE6625A2F3CA8A700A1807A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2DE661152F3CA8A500A1807A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2DE6621C2F3CA8A500A1807A;
+			remoteInfo = AlcoholControlWidget;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2DE6620C2F3CA8A500A1807A /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2DE6620B2F3CA8A500A1807A /* AlcoholControlWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2DE6611D2F3CA8A500A1807A /* AlcoholControl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlcoholControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DE6612C2F3CA8A700A1807A /* AlcoholControlTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AlcoholControlTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DE661362F3CA8A700A1807A /* AlcoholControlUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AlcoholControlUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DE6621D2F3CA8A500A1807A /* AlcoholControlWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlcoholControlWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DE6631D2F3CA8A500A1807A /* AlcoholControlWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlcoholControlWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +70,16 @@
 		2DE661392F3CA8A700A1807A /* AlcoholControlUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AlcoholControlUITests;
+			sourceTree = "<group>";
+		};
+		2DE6621F2F3CA8A500A1807A /* AlcoholControlWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AlcoholControlWidget;
+			sourceTree = "<group>";
+		};
+		2DE6631F2F3CA8A500A1807A /* AlcoholControlWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AlcoholControlWatch;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +106,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2DE6621A2F3CA8A500A1807A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2DE6631A2F3CA8A500A1807A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +129,8 @@
 				2DE6611F2F3CA8A500A1807A /* AlcoholControl */,
 				2DE6612F2F3CA8A700A1807A /* AlcoholControlTests */,
 				2DE661392F3CA8A700A1807A /* AlcoholControlUITests */,
+				2DE6621F2F3CA8A500A1807A /* AlcoholControlWidget */,
+				2DE6631F2F3CA8A500A1807A /* AlcoholControlWatch */,
 				2DE6611E2F3CA8A500A1807A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +141,8 @@
 				2DE6611D2F3CA8A500A1807A /* AlcoholControl.app */,
 				2DE6612C2F3CA8A700A1807A /* AlcoholControlTests.xctest */,
 				2DE661362F3CA8A700A1807A /* AlcoholControlUITests.xctest */,
+				2DE6621D2F3CA8A500A1807A /* AlcoholControlWidget.appex */,
+				2DE6631D2F3CA8A500A1807A /* AlcoholControlWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,10 +157,12 @@
 				2DE661192F3CA8A500A1807A /* Sources */,
 				2DE6611A2F3CA8A500A1807A /* Frameworks */,
 				2DE6611B2F3CA8A500A1807A /* Resources */,
+				2DE6620C2F3CA8A500A1807A /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2DE6622E2F3CA8A500A1807A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2DE6611F2F3CA8A500A1807A /* AlcoholControl */,
@@ -163,6 +220,50 @@
 			productReference = 2DE661362F3CA8A700A1807A /* AlcoholControlUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		2DE6621C2F3CA8A500A1807A /* AlcoholControlWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2DE662402F3CA8A700A1807A /* Build configuration list for PBXNativeTarget "AlcoholControlWidget" */;
+			buildPhases = (
+				2DE662192F3CA8A500A1807A /* Sources */,
+				2DE6621A2F3CA8A500A1807A /* Frameworks */,
+				2DE6621B2F3CA8A500A1807A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2DE6621F2F3CA8A500A1807A /* AlcoholControlWidget */,
+			);
+			name = AlcoholControlWidget;
+			packageProductDependencies = (
+			);
+			productName = AlcoholControlWidget;
+			productReference = 2DE6621D2F3CA8A500A1807A /* AlcoholControlWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		2DE6631C2F3CA8A500A1807A /* AlcoholControlWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2DE663402F3CA8A700A1807A /* Build configuration list for PBXNativeTarget "AlcoholControlWatch" */;
+			buildPhases = (
+				2DE663192F3CA8A500A1807A /* Sources */,
+				2DE6631A2F3CA8A500A1807A /* Frameworks */,
+				2DE6631B2F3CA8A500A1807A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2DE6631F2F3CA8A500A1807A /* AlcoholControlWatch */,
+			);
+			name = AlcoholControlWatch;
+			packageProductDependencies = (
+			);
+			productName = AlcoholControlWatch;
+			productReference = 2DE6631D2F3CA8A500A1807A /* AlcoholControlWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +285,12 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 2DE6611C2F3CA8A500A1807A;
 					};
+					2DE6621C2F3CA8A500A1807A = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					2DE6631C2F3CA8A500A1807A = {
+						CreatedOnToolsVersion = 26.2;
+					};
 				};
 			};
 			buildConfigurationList = 2DE661182F3CA8A500A1807A /* Build configuration list for PBXProject "AlcoholControl" */;
@@ -192,6 +299,9 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
+				es,
+				ru,
 			);
 			mainGroup = 2DE661142F3CA8A500A1807A;
 			minimizedProjectReferenceProxies = 1;
@@ -203,6 +313,8 @@
 				2DE6611C2F3CA8A500A1807A /* AlcoholControl */,
 				2DE6612B2F3CA8A700A1807A /* AlcoholControlTests */,
 				2DE661352F3CA8A700A1807A /* AlcoholControlUITests */,
+				2DE6621C2F3CA8A500A1807A /* AlcoholControlWidget */,
+				2DE6631C2F3CA8A500A1807A /* AlcoholControlWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +335,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2DE661342F3CA8A700A1807A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2DE6621B2F3CA8A500A1807A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2DE6631B2F3CA8A500A1807A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +379,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2DE662192F3CA8A500A1807A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2DE663192F3CA8A500A1807A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +405,11 @@
 			isa = PBXTargetDependency;
 			target = 2DE6611C2F3CA8A500A1807A /* AlcoholControl */;
 			targetProxy = 2DE661372F3CA8A700A1807A /* PBXContainerItemProxy */;
+		};
+		2DE6622E2F3CA8A500A1807A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2DE6621C2F3CA8A500A1807A /* AlcoholControlWidget */;
+			targetProxy = 2DE6625A2F3CA8A700A1807A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -395,16 +540,21 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AlcoholControl/AlcoholControl.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Alcohol Control reads sleep, steps, and resting heart rate to personalize recovery insights.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -427,16 +577,21 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AlcoholControl/AlcoholControl.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Alcohol Control reads sleep, steps, and resting heart rate to personalize recovery insights.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -538,6 +693,120 @@
 			};
 			name = Release;
 		};
+		2DE662412F3CA8A700A1807A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AlcoholControlWidget/AlcoholControlWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/AlcoholControlWidget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maxches.AlcoholControl.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2DE662422F3CA8A700A1807A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AlcoholControlWidget/AlcoholControlWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/AlcoholControlWidget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maxches.AlcoholControl.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2DE663412F3CA8A700A1807A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AlcoholControlWatch/AlcoholControlWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AlcoholControl;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = maxches.AlcoholControl;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maxches.AlcoholControl.watch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Debug;
+		};
+		2DE663422F3CA8A700A1807A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AlcoholControlWatch/AlcoholControlWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 274RF4F6D5;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AlcoholControl;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = maxches.AlcoholControl;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maxches.AlcoholControl.watch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -573,6 +842,24 @@
 			buildConfigurations = (
 				2DE661472F3CA8A700A1807A /* Debug */,
 				2DE661482F3CA8A700A1807A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2DE662402F3CA8A700A1807A /* Build configuration list for PBXNativeTarget "AlcoholControlWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2DE662412F3CA8A700A1807A /* Debug */,
+				2DE662422F3CA8A700A1807A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2DE663402F3CA8A700A1807A /* Build configuration list for PBXNativeTarget "AlcoholControlWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2DE663412F3CA8A700A1807A /* Debug */,
+				2DE663422F3CA8A700A1807A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

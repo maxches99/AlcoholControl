@@ -10,9 +10,21 @@ import SwiftData
 
 @main
 struct AlcoholControlApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var appState = AppState()
+    @AppStorage("selectedAppLanguage") private var selectedAppLanguage = AppLanguage.system.rawValue
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            UserProfile.self,
+            Session.self,
+            DrinkEntry.self,
+            WaterEntry.self,
+            MealEntry.self,
+            MorningCheckIn.self,
+            HealthDailySnapshot.self,
+            RiskModelRun.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -26,7 +38,23 @@ struct AlcoholControlApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(PurchaseService.shared)
+                .environmentObject(appState)
+                .environment(\.locale, resolvedLanguage.locale)
+                .task {
+                    appDelegate.appState = appState
+                    await PurchaseService.shared.restore()
+                }
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task { await PurchaseService.shared.restore() }
+            }
+        }
+    }
+
+    private var resolvedLanguage: AppLanguage {
+        AppLanguage(rawValue: selectedAppLanguage) ?? .system
     }
 }

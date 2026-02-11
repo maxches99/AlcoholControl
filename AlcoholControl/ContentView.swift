@@ -1,61 +1,69 @@
-//
-//  ContentView.swift
-//  AlcoholControl
-//
-//  Created by Maxim Chesnikov on 11.02.2026.
-//
-
 import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @EnvironmentObject private var appState: AppState
+    @AppStorage("hasPassedAgeGate") private var hasPassedAgeGate = false
+    @AppStorage("didFinishOnboarding") private var didFinishOnboarding = false
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
+        Group {
+            if !hasPassedAgeGate {
+                AgeGateView {
+                    hasPassedAgeGate = true
                 }
-                .onDelete(perform: deleteItems)
+            } else if !didFinishOnboarding {
+                OnboardingView()
+            } else {
+                MainTabs(selectedTab: $appState.selectedTab)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
     }
+}
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+struct MainTabs: View {
+    @Binding var selectedTab: AppTab
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            TodayView()
+                .tag(AppTab.today)
+                .tabItem {
+                    Label("Сегодня", systemImage: "sun.max")
+                }
+            HistoryView()
+                .tag(AppTab.history)
+                .tabItem {
+                    Label("История", systemImage: "clock")
+                }
+            AnalyticsView()
+                .tag(AppTab.analytics)
+                .tabItem {
+                    Label("Аналитика", systemImage: "chart.bar")
+                }
+            SettingsView()
+                .tag(AppTab.settings)
+                .tabItem {
+                    Label("Настройки", systemImage: "gearshape")
+                }
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .environmentObject(AppState())
+        .modelContainer(
+            for: [
+                UserProfile.self,
+                Session.self,
+                DrinkEntry.self,
+                WaterEntry.self,
+                MealEntry.self,
+                MorningCheckIn.self,
+                HealthDailySnapshot.self,
+                RiskModelRun.self
+            ],
+            inMemory: true
+        )
 }
