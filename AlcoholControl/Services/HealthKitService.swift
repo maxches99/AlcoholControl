@@ -3,6 +3,17 @@ import HealthKit
 
 @MainActor
 final class HealthKitService {
+    enum WaterSyncDirection: String {
+        case importFromHealth
+        case exportToHealth
+    }
+
+    enum StorageKey {
+        static let syncWaterWithHealth = "syncWaterWithHealth"
+        static let waterLastSyncAt = "health.water.lastSyncAt"
+        static let waterLastSyncDirection = "health.water.lastSyncDirection"
+    }
+
     static let shared = HealthKitService()
 
     private let store = HKHealthStore()
@@ -10,9 +21,13 @@ final class HealthKitService {
     private let stepType = HKObjectType.quantityType(forIdentifier: .stepCount)
     private let restingHeartRateType = HKObjectType.quantityType(forIdentifier: .restingHeartRate)
     private let hrvType = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
+    private let dietaryWaterType = HKObjectType.quantityType(forIdentifier: .dietaryWater)
     private let stepsCachePrefix = "health.steps."
     private let restingHRCachePrefix = "health.restingHR."
     private let hrvCachePrefix = "health.hrv."
+    private let importedWaterCachePrefix = "health.water.imported."
+    private let waterSourceMetadataKey = "com.maxches.alcoholcontrol.water.source"
+    private let waterSourceMetadataValue = "app"
     private let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -32,6 +47,7 @@ final class HealthKitService {
         guard isAvailable, let sleepType else { return false }
         do {
             var readTypes: Set<HKObjectType> = [sleepType]
+            var shareTypes: Set<HKSampleType> = []
             if let stepType {
                 readTypes.insert(stepType)
             }
@@ -39,8 +55,12 @@ final class HealthKitService {
                 readTypes.insert(restingHeartRateType)
             }
             if let hrvType { readTypes.insert(hrvType) }
+            if let dietaryWaterType {
+                readTypes.insert(dietaryWaterType)
+                shareTypes.insert(dietaryWaterType)
+            }
 
-            try await store.requestAuthorization(toShare: [], read: readTypes)
+            try await store.requestAuthorization(toShare: shareTypes, read: readTypes)
             return true
         } catch {
             return false
@@ -187,6 +207,94 @@ final class HealthKitService {
         return syncedDays
     }
 
+    func saveWaterIntake(volumeMl: Double, at date: Date = .now, syncIdentifier: String? = nil) async -> Bool {
+        guard isAvailable, let dietaryWaterType, volumeMl > 0 else { return false }
+
+        var metadata: [String: Any] = [waterSourceMetadataKey: waterSourceMetadataValue]
+        if let syncIdentifier {
+            metadata[HKMetadataKeySyncIdentifier] = syncIdentifier
+            metadata[HKMetadataKeySyncVersion] = 1
+        }
+
+        let quantity = HKQuantity(unit: .literUnit(with: .milli), doubleValue: volumeMl)
+        let sample = HKQuantitySample(
+            type: dietaryWaterType,
+            quantity: quantity,
+            start: date,
+            end: date,
+            metadata: metadata
+        )
+
+        return await withCheckedContinuation { continuation in
+            store.save(sample) { success, _ in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    func fetchNewExternalWaterSamples(on day: Date) async -> [HealthWaterSample] {
+        let importedIDs = importedWaterSampleIDs(on: day)
+        let samples = await fetchWaterSamples(on: day)
+
+        return samples.filter { sample in
+            sample.volumeMl > 0 &&
+            !sample.isFromAlcoholControl &&
+            !importedIDs.contains(sample.id.uuidString)
+        }
+    }
+
+    func markWaterSamplesAsImported(_ ids: [UUID], on day: Date) {
+        guard !ids.isEmpty else { return }
+        let key = importedWaterCacheKey(for: day)
+        var importedIDs = importedWaterSampleIDs(on: day)
+        ids.forEach { importedIDs.insert($0.uuidString) }
+        UserDefaults.standard.set(Array(importedIDs), forKey: key)
+    }
+
+    func recordWaterSync(direction: WaterSyncDirection, at date: Date = .now) {
+        let defaults = UserDefaults.standard
+        defaults.set(date.timeIntervalSince1970, forKey: StorageKey.waterLastSyncAt)
+        defaults.set(direction.rawValue, forKey: StorageKey.waterLastSyncDirection)
+    }
+
+    private func fetchWaterSamples(on day: Date) async -> [HealthWaterSample] {
+        guard isAvailable, let dietaryWaterType else { return [] }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(24 * 3600)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+        let appBundleID = Bundle.main.bundleIdentifier
+        let unit = HKUnit.literUnit(with: .milli)
+        let sourceMetadataKey = waterSourceMetadataKey
+        let sourceMetadataValue = waterSourceMetadataValue
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: dietaryWaterType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: sort
+            ) { _, samples, _ in
+                let quantitySamples = (samples as? [HKQuantitySample]) ?? []
+                let mapped = quantitySamples.map { sample in
+                    let value = max(0, sample.quantity.doubleValue(for: unit))
+                    let sourceIsApp = sample.metadata?[sourceMetadataKey] as? String == sourceMetadataValue
+                    let sameBundle = appBundleID != nil && sample.sourceRevision.source.bundleIdentifier == appBundleID
+
+                    return HealthWaterSample(
+                        id: sample.uuid,
+                        volumeMl: value,
+                        date: sample.endDate,
+                        isFromAlcoholControl: sourceIsApp || sameBundle
+                    )
+                }
+                continuation.resume(returning: mapped)
+            }
+            store.execute(query)
+        }
+    }
+
     private func saveStepCount(_ steps: Int, on day: Date) {
         UserDefaults.standard.set(steps, forKey: stepsCacheKey(for: day))
     }
@@ -267,6 +375,23 @@ final class HealthKitService {
     private func hrvCacheKey(for day: Date) -> String {
         "\(hrvCachePrefix)\(dayFormatter.string(from: day))"
     }
+
+    private func importedWaterCacheKey(for day: Date) -> String {
+        "\(importedWaterCachePrefix)\(dayFormatter.string(from: day))"
+    }
+
+    private func importedWaterSampleIDs(on day: Date) -> Set<String> {
+        let key = importedWaterCacheKey(for: day)
+        let values = UserDefaults.standard.array(forKey: key) as? [String] ?? []
+        return Set(values)
+    }
+}
+
+struct HealthWaterSample: Identifiable {
+    let id: UUID
+    let volumeMl: Double
+    let date: Date
+    let isFromAlcoholControl: Bool
 }
 
 struct SleepSegment {

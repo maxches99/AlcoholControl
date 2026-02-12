@@ -3,6 +3,11 @@ import SwiftData
 
 @MainActor
 struct SessionService {
+    enum WaterSource {
+        case app
+        case healthKit
+    }
+
     private let calculator = BACCalculator()
 
     func activeSession(context: ModelContext) throws -> Session? {
@@ -73,12 +78,34 @@ struct SessionService {
         context: ModelContext,
         profile: UserProfile?,
         createdAt: Date = .now,
-        volumeMl: Double? = nil
+        volumeMl: Double? = nil,
+        source: WaterSource = .app
     ) {
         let water = WaterEntry(createdAt: createdAt, volumeMl: volumeMl)
         water.session = session
         session.waters.append(water)
         recompute(session, profile: profile)
+
+        guard source == .app, shouldSyncWaterWithHealth, let volumeMl, volumeMl > 0 else { return }
+        let syncIdentifier = water.id.uuidString
+        Task { @MainActor in
+            let saved = await HealthKitService.shared.saveWaterIntake(
+                volumeMl: volumeMl,
+                at: createdAt,
+                syncIdentifier: syncIdentifier
+            )
+            if saved {
+                HealthKitService.shared.recordWaterSync(direction: .exportToHealth)
+            }
+        }
+    }
+
+    private var shouldSyncWaterWithHealth: Bool {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: HealthKitService.StorageKey.syncWaterWithHealth) == nil {
+            return true
+        }
+        return defaults.bool(forKey: HealthKitService.StorageKey.syncWaterWithHealth)
     }
 
     func addMeal(

@@ -34,6 +34,9 @@ struct SettingsView: View {
     @AppStorage("trustedContactName") private var trustedContactName = ""
     @AppStorage("trustedContactPhone") private var trustedContactPhone = ""
     @AppStorage("liveActivityEnabled") private var liveActivityEnabled = true
+    @AppStorage(HealthKitService.StorageKey.syncWaterWithHealth) private var syncWaterWithHealth = true
+    @AppStorage(HealthKitService.StorageKey.waterLastSyncAt) private var waterLastSyncAt = 0.0
+    @AppStorage(HealthKitService.StorageKey.waterLastSyncDirection) private var waterLastSyncDirection = ""
     @AppStorage("safetyModeEnabled") private var safetyModeEnabled = false
     @AppStorage("weeklyHeavyMorningLimit") private var weeklyHeavyMorningLimit = 2
     @AppStorage("weeklyHighMemoryRiskLimit") private var weeklyHighMemoryRiskLimit = 2
@@ -53,6 +56,26 @@ struct SettingsView: View {
 
     private var profile: UserProfile? {
         profiles.first
+    }
+
+    private var waterSyncStatusText: String {
+        guard waterLastSyncAt > 0 else {
+            return L10n.tr("Последняя синхронизация воды: пока нет данных")
+        }
+
+        let date = Date(timeIntervalSince1970: waterLastSyncAt)
+        let timestamp = date.formatted(date: .abbreviated, time: .shortened)
+        let directionText: String
+        switch waterLastSyncDirection {
+        case HealthKitService.WaterSyncDirection.importFromHealth.rawValue:
+            directionText = L10n.tr("импорт из Apple Health")
+        case HealthKitService.WaterSyncDirection.exportToHealth.rawValue:
+            directionText = L10n.tr("экспорт в Apple Health")
+        default:
+            directionText = L10n.tr("синхронизация")
+        }
+
+        return L10n.format("Последняя синхронизация воды: %@ (%@)", timestamp, directionText)
     }
 
     var body: some View {
@@ -190,8 +213,17 @@ struct SettingsView: View {
 
                 Section("Интеграции") {
                     Toggle("Live Activity (beta)", isOn: $liveActivityEnabled)
+                    Toggle(isOn: $syncWaterWithHealth) {
+                        Text(L10n.tr("Синхронизировать воду с Apple Health"))
+                    }
+                    Text(L10n.tr("Когда включено, вода импортируется из Apple Health и новые записи из приложения отправляются обратно в Health."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(waterSyncStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                    Button(connectingHealth ? "Подключаем Apple Health..." : "Подключить Apple Health (сон / шаги / пульс)") {
+                    Button(connectingHealth ? "Подключаем Apple Health..." : "Подключить Apple Health (сон / вода / шаги / пульс)") {
                         Task { await connectHealthKit() }
                     }
                     .disabled(connectingHealth)
@@ -380,7 +412,7 @@ struct SettingsView: View {
         let (stepsDays, hrDays, snapshotDays) = await (syncedDays, syncedHRDays, syncedSnapshots)
 
         statusMessage = L10n.format(
-            "Apple Health подключен (сон, шаги, пульс, HRV). Синхронизировано: шаги %d дн., пульс %d дн., слепки %d дн.",
+            "Apple Health подключен (сон, вода, шаги, пульс, HRV). Синхронизировано: шаги %d дн., пульс %d дн., слепки %d дн.",
             stepsDays,
             hrDays,
             snapshotDays

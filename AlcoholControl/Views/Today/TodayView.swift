@@ -129,6 +129,7 @@ struct TodayView: View {
     @AppStorage("preSessionPlanEnabled") private var preSessionPlanEnabled = true
     @AppStorage("autoFinishSuggestionHours") private var autoFinishSuggestionHours = 6
     @AppStorage("liveActivityEnabled") private var liveActivityEnabled = true
+    @AppStorage(HealthKitService.StorageKey.syncWaterWithHealth) private var syncWaterWithHealth = true
     @AppStorage("safetyModeEnabled") private var safetyModeEnabled = false
     @AppStorage("trustedContactPhone") private var trustedContactPhone = ""
     @AppStorage("riskModelVariant") private var riskModelVariant = "A"
@@ -356,6 +357,10 @@ struct TodayView: View {
             .onChange(of: scenePhase) { _, newValue in
                 guard newValue == .active else { return }
                 applyPendingWatchActionsIfNeeded()
+                loadedHealthData = false
+                Task {
+                    await loadTodayHealthDataIfNeeded()
+                }
             }
             .onChange(of: activeTermHint) { _, newValue in
                 if newValue != nil {
@@ -1254,21 +1259,67 @@ struct TodayView: View {
     }
 
     private func loadTodayHealthDataIfNeeded() async {
-        guard !loadedHealthData else { return }
-        loadedHealthData = true
-        deriveHealthFromSnapshots(for: .now)
+        if !loadedHealthData {
+            loadedHealthData = true
+            deriveHealthFromSnapshots(for: .now)
 
-        if healthSleepHours == nil {
-            healthSleepHours = await HealthKitService.shared.fetchLastNightSleepHours()
+            if healthSleepHours == nil {
+                healthSleepHours = await HealthKitService.shared.fetchLastNightSleepHours()
+            }
+            if healthStepCount == nil {
+                healthStepCount = await HealthKitService.shared.fetchTodayStepCount()
+            }
+            if healthRestingHR == nil {
+                healthRestingHR = await HealthKitService.shared.fetchLatestRestingHeartRate()
+            }
+            if healthHRV == nil {
+                healthHRV = await HealthKitService.shared.fetchHrvSdnn(on: .now)
+            }
         }
-        if healthStepCount == nil {
-            healthStepCount = await HealthKitService.shared.fetchTodayStepCount()
+
+        await importTodayWaterFromHealthIfNeeded()
+    }
+
+    private func importTodayWaterFromHealthIfNeeded() async {
+        guard syncWaterWithHealth else { return }
+        guard let session = activeSession else { return }
+        let today = Calendar.current.startOfDay(for: .now)
+        let externalSamples = await HealthKitService.shared.fetchNewExternalWaterSamples(on: today)
+        guard !externalSamples.isEmpty else { return }
+
+        var importedIDs: [UUID] = []
+        var importedCount = 0
+        var knownEntries: [(date: Date, volumeMl: Double)] = session.waters.compactMap { entry in
+            guard let volumeMl = entry.volumeMl else { return nil }
+            return (entry.createdAt, volumeMl)
         }
-        if healthRestingHR == nil {
-            healthRestingHR = await HealthKitService.shared.fetchLatestRestingHeartRate()
+
+        for sample in externalSamples {
+            let duplicate = knownEntries.contains { known in
+                let closeVolume = abs(known.volumeMl - sample.volumeMl) < 1
+                let closeDate = abs(known.date.timeIntervalSince(sample.date)) < 90
+                return closeVolume && closeDate
+            }
+
+            importedIDs.append(sample.id)
+            guard !duplicate else { continue }
+
+            sessionService.addWater(
+                to: session,
+                context: context,
+                profile: profile,
+                createdAt: sample.date,
+                volumeMl: sample.volumeMl,
+                source: .healthKit
+            )
+            knownEntries.append((sample.date, sample.volumeMl))
+            importedCount += 1
         }
-        if healthHRV == nil {
-            healthHRV = await HealthKitService.shared.fetchHrvSdnn(on: .now)
+
+        HealthKitService.shared.markWaterSamplesAsImported(importedIDs, on: today)
+        if importedCount > 0 {
+            HealthKitService.shared.recordWaterSync(direction: .importFromHealth)
+            infoMessage = L10n.format("Импортировано из Apple Health: %d записей воды", importedCount)
         }
     }
 
