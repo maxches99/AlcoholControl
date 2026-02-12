@@ -115,6 +115,7 @@ struct TodayView: View {
     @State private var activeSheet: TodaySheet?
     @State private var showEmergencyConfirm = false
     @State private var showGlossaryTooltip = false
+    @State private var showPromilleInfo = false
     @State private var activeTermHint: TermHintOverlayState?
     @State private var infoMessage: String?
     @State private var healthSleepHours: Double?
@@ -301,6 +302,9 @@ struct TodayView: View {
                 case .safetyCenter:
                     SafetyCenterView()
                 }
+            }
+            .sheet(isPresented: $showPromilleInfo) {
+                PromilleInfoSheet()
             }
             .overlay(alignment: .topLeading) {
                 if showGlossaryTooltip {
@@ -683,7 +687,7 @@ struct TodayView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("BAC (примерно)")
+                        Text(L10n.tr("BAC (примерно)"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         TermHintBadge(
@@ -691,9 +695,20 @@ struct TodayView: View {
                             definition: "Оценка концентрации алкоголя в крови по модели, а не медицинское измерение.",
                             activeHint: $activeTermHint
                         )
+                        Button {
+                            showPromilleInfo = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.tr("Как понимать промилле"))
                     }
                     Text(String(format: "%.3f", currentBAC))
                         .font(.system(size: 46, weight: .bold, design: .rounded))
+                    Text(L10n.format("Промилле (примерно): %.2f‰", currentBAC * 10))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
@@ -712,7 +727,7 @@ struct TodayView: View {
                         .foregroundStyle(.primary)
                 }
             }
-            Text("Оценка приблизительная. Не использовать для решения, можно ли водить.")
+            Text(L10n.tr("Оценка приблизительная. Не использовать для решения, можно ли водить."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -2282,6 +2297,40 @@ private struct AddWaterSheet: View {
     }
 }
 
+private struct PromilleInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(L10n.tr("Промилле (‰) в приложении"))
+                        .font(.headline)
+                    Text(L10n.tr("Промилле (‰) в приложении - это приблизительная оценка концентрации алкоголя в крови по модели, а не медицинское измерение."))
+                        .font(.body)
+                    Text(L10n.tr("Фактическое состояние может отличаться из-за сна, еды, самочувствия, лекарств и других факторов."))
+                        .font(.body)
+                    Text(L10n.tr("Эти данные только для личного harm-reduction трекинга и не подходят для решений о вождении, безопасности, медицине или законе."))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            .navigationTitle(L10n.tr("Как понимать промилле"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.tr("Закрыть")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
 private struct EndSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -2300,6 +2349,7 @@ private struct EndSessionSheet: View {
             Form {
                 Section("Итог") {
                     Text("Пик BAC (примерно): \(String(format: "%.3f", session.cachedPeakBAC))")
+                    Text(L10n.format("Пик промилле (примерно): %.2f‰", session.cachedPeakBAC * 10))
                     if let sober = session.cachedEstimatedSoberAt {
                         Text("До ~0.00: \(sober, format: .dateTime.hour().minute())")
                     } else {

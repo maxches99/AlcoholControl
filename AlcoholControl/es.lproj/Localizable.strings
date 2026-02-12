@@ -611,3 +611,10 @@
 "Процесс вечера выглядел устойчиво и обычно даёт более мягкое восстановление." = "El proceso de la noche fue estable y suele dar una recuperacion mas suave.";
 "Процесс средний: есть 1-2 точки роста, в первую очередь вода и темп." = "Proceso medio: hay 1-2 puntos de mejora, primero agua y ritmo.";
 "Процесс был нагрузочным: в следующий раз лучше заранее задать лимит и воду." = "El proceso fue exigente: la proxima vez define antes limite y agua.";
+"Как понимать промилле" = "Como interpretar el promille";
+"Промилле (‰) в приложении" = "Promille (‰) en la app";
+"Промилле (‰) в приложении - это приблизительная оценка концентрации алкоголя в крови по модели, а не медицинское измерение." = "El promille (‰) en la app es una estimacion aproximada de la concentracion de alcohol en sangre segun un modelo, no una medicion medica.";
+"Фактическое состояние может отличаться из-за сна, еды, самочувствия, лекарств и других факторов." = "El estado real puede diferir por sueno, comida, bienestar, medicamentos y otros factores.";
+"Эти данные только для личного harm-reduction трекинга и не подходят для решений о вождении, безопасности, медицине или законе." = "Estos datos son solo para seguimiento personal de reduccion de riesgos y no sirven para decisiones de conduccion, seguridad, medicina o ambito legal.";
+"Промилле (примерно): %.2f‰" = "Promille (aprox.): %.2f‰";
+"Пик промилле (примерно): %.2f‰" = "Pico de promille (aprox.): %.2f‰";
