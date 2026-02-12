@@ -501,7 +501,7 @@ struct ForecastView: View {
                     if let wellbeingTrend = patternAssessment.wellbeingTrend {
                         trendBadge(title: "Тренд чек-ина", direction: wellbeingTrend)
                     }
-                    Text("Streak воды: \(patternAssessment.waterStreak) · Streak еды: \(patternAssessment.mealStreak)")
+                    Text(L10n.format("Серия воды: %d · Серия еды: %d", patternAssessment.waterStreak, patternAssessment.mealStreak))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -542,7 +542,7 @@ struct ForecastView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Recovery plan (2-4h)")
+                    Text(L10n.tr("План восстановления (2-4ч)"))
                         .font(.headline)
                     Text("Отмечайте шаги по мере выполнения, чтобы мягче пройти восстановление.")
                         .font(.caption)

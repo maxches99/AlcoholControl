@@ -4,6 +4,14 @@ import SwiftUI
 import ActivityKit
 #endif
 
+private func widgetTr(_ key: String) -> String {
+    NSLocalizedString(key, comment: "")
+}
+
+private func widgetFmt(_ key: String, _ args: CVarArg...) -> String {
+    String(format: widgetTr(key), locale: .autoupdatingCurrent, arguments: args)
+}
+
 private enum WidgetKeys {
     static let appGroupID = "group.maxches.AlcoholControl"
     static let isActive = "widget.isActive"
@@ -95,7 +103,7 @@ struct AlcoholControlWidget: Widget {
         StaticConfiguration(kind: kind, provider: AlcoholWidgetProvider()) { entry in
             AlcoholControlWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Alcohol Control")
+        .configurationDisplayName(widgetTr("Alcohol Control"))
         .description("Текущий статус сессии, BAC и водный баланс")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
@@ -117,10 +125,10 @@ struct AlcoholControlLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: EveningSessionAttributes.self) { context in
             VStack(alignment: .leading, spacing: 8) {
-                Text("Alcohol Control")
+                Text(widgetTr("Alcohol Control"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(String(format: "BAC ~%.3f", context.state.currentBAC))
+                Text(widgetFmt("BAC ~%.3f", context.state.currentBAC))
                     .font(.title3.bold())
                 Text(soberText(context.state.targetSoberAt))
                     .font(.footnote)
@@ -157,16 +165,16 @@ struct AlcoholControlLiveActivityWidget: Widget {
     }
 
     private func soberText(_ target: Date?) -> String {
-        guard let target else { return "0.00 now" }
+        guard let target else { return widgetTr("0.00 сейчас") }
         let interval = target.timeIntervalSince(.now)
-        if interval <= 0 { return "0.00 now" }
+        if interval <= 0 { return widgetTr("0.00 сейчас") }
         let minutes = Int(interval / 60)
         let hours = minutes / 60
         let rest = minutes % 60
         if hours > 0 {
-            return "Until 0.00 ~\(hours)h \(rest)m"
+            return widgetFmt("До 0.00 ~%dч %dм", hours, rest)
         }
-        return "Until 0.00 ~\(rest)m"
+        return widgetFmt("До 0.00 ~%dм", rest)
     }
 }
 #endif
@@ -192,7 +200,7 @@ private struct AlcoholControlWidgetEntryView: View {
     private var regularView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Alcohol Control")
+                Text(widgetTr("Alcohol Control"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -202,7 +210,7 @@ private struct AlcoholControlWidgetEntryView: View {
             }
 
             if entry.isActive {
-                Text(String(format: "BAC ~%.3f", entry.currentBAC))
+                Text(widgetFmt("BAC ~%.3f", entry.currentBAC))
                     .font(.title3.bold())
 
                 Text(soberText)
@@ -221,7 +229,7 @@ private struct AlcoholControlWidgetEntryView: View {
                     .foregroundStyle(.secondary)
 
                 HStack {
-                    Text("Recovery \(entry.recoveryScore)")
+                    Text(widgetFmt("Recovery %d", entry.recoveryScore))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(recoveryColor)
                     Spacer()
@@ -259,14 +267,14 @@ private struct AlcoholControlWidgetEntryView: View {
     private var accessoryRectangularView: some View {
         VStack(alignment: .leading, spacing: 2) {
             if entry.isActive {
-                Text(String(format: "BAC %.3f", entry.currentBAC))
+                Text(widgetFmt("BAC %.3f", entry.currentBAC))
                     .font(.caption.bold())
                 Text(soberText)
                     .font(.caption2)
-                Text("H2O \(Int((waterProgress * 100).rounded()))%")
+                Text(widgetFmt("H2O %d%%", Int((waterProgress * 100).rounded())))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("Rec \(entry.recoveryScore)")
+                Text(widgetFmt("Rec %d", entry.recoveryScore))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(recoveryColor)
             } else {
@@ -286,11 +294,11 @@ private struct AlcoholControlWidgetEntryView: View {
                     Text("\(Int((waterProgress * 100).rounded()))%")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
-                    Text("R\(entry.recoveryScore)")
+                    Text(widgetFmt("R%d", entry.recoveryScore))
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(recoveryColor)
                 } else {
-                    Text("Off")
+                    Text(widgetTr("Выкл"))
                         .font(.caption2)
                 }
             }
@@ -299,9 +307,9 @@ private struct AlcoholControlWidgetEntryView: View {
 
     private var accessoryInlineView: some View {
         if entry.isActive {
-            Text("BAC \(String(format: "%.2f", entry.currentBAC)) • \(soberInlineText) • Rec \(entry.recoveryScore)")
+            Text(widgetFmt("BAC %.2f • %@ • Rec %d", entry.currentBAC, soberInlineText, entry.recoveryScore))
         } else {
-            Text("No active session")
+            Text(widgetTr("Сессия не активна"))
         }
     }
 
@@ -328,22 +336,22 @@ private struct AlcoholControlWidgetEntryView: View {
         let hours = minutes / 60
         let rest = minutes % 60
         if hours > 0 {
-            return "До 0.00 ~\(hours)ч \(rest)м"
+            return widgetFmt("До 0.00 ~%dч %dм", hours, rest)
         }
-        return "До 0.00 ~\(rest)м"
+        return widgetFmt("До 0.00 ~%dм", rest)
     }
 
     private var soberInlineText: String {
-        guard let soberAt else { return "0.00 now" }
+        guard let soberAt else { return widgetTr("0.00 сейчас") }
         let seconds = soberAt.timeIntervalSince(.now)
-        if seconds <= 0 { return "0.00 now" }
+        if seconds <= 0 { return widgetTr("0.00 сейчас") }
         let minutes = Int(seconds / 60)
         let hours = minutes / 60
         let rest = minutes % 60
         if hours > 0 {
-            return "\(hours)h \(rest)m"
+            return widgetFmt("%dч %dм", hours, rest)
         }
-        return "\(rest)m"
+        return widgetFmt("%dм", rest)
     }
 
     private var soberAt: Date? {

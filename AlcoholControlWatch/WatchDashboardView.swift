@@ -1,6 +1,14 @@
 import SwiftUI
 import Combine
 
+private func watchTr(_ key: String) -> String {
+    NSLocalizedString(key, comment: "")
+}
+
+private func watchFmt(_ key: String, _ args: CVarArg...) -> String {
+    String(format: watchTr(key), locale: .autoupdatingCurrent, arguments: args)
+}
+
 private enum WatchKeys {
     static let appGroupID = "group.maxches.AlcoholControl"
     static let isActive = "widget.isActive"
@@ -110,7 +118,7 @@ final class WatchSnapshotStore: ObservableObject {
         guard let defaults else { return }
         defaults.set(true, forKey: WatchKeys.pendingSafetyCheck)
         defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
-        statusMessage = "Запросили Safety Center на iPhone"
+        statusMessage = watchTr("Запросили центр безопасности на iPhone")
     }
 
     func requestPause(minutes: Int = 25) {
@@ -128,7 +136,7 @@ struct WatchDashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Alcohol")
+                    Text(watchTr("Alcohol Control"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -138,7 +146,7 @@ struct WatchDashboardView: View {
                 }
 
                 if store.snapshot.isActive {
-                    Text(String(format: "BAC %.3f", store.snapshot.currentBAC))
+                    Text(watchFmt("BAC %.3f", store.snapshot.currentBAC))
                         .font(.headline)
 
                     Text(soberText(store.snapshot.soberAt))
@@ -156,7 +164,7 @@ struct WatchDashboardView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(riskColor(store.snapshot.risk))
 
-                    Text("Recovery \(store.snapshot.recoveryScore)/100")
+                    Text(watchFmt("Recovery %d/100", store.snapshot.recoveryScore))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(recoveryColor(store.snapshot.recoveryLevel))
                 } else {
@@ -182,18 +190,18 @@ struct WatchDashboardView: View {
                 if store.snapshot.isActive {
                     HStack(spacing: 8) {
                         Button("Пиво 330") {
-                            store.addDrinkQuick(volumeMl: 330, abv: 5, title: "Beer", category: "beer")
+                            store.addDrinkQuick(volumeMl: 330, abv: 5, title: watchTr("Пиво"), category: "beer")
                         }
                         .buttonStyle(.bordered)
 
                         Button("Вино 150") {
-                            store.addDrinkQuick(volumeMl: 150, abv: 12, title: "Wine", category: "wine")
+                            store.addDrinkQuick(volumeMl: 150, abv: 12, title: watchTr("Вино"), category: "wine")
                         }
                         .buttonStyle(.bordered)
                     }
 
                     Button("Коктейль") {
-                        store.addDrinkQuick(volumeMl: 180, abv: 18, title: "Cocktail", category: "cocktail")
+                        store.addDrinkQuick(volumeMl: 180, abv: 18, title: watchTr("Коктейль"), category: "cocktail")
                     }
                     .buttonStyle(.bordered)
 
@@ -244,18 +252,18 @@ struct WatchDashboardView: View {
     }
 
     private func soberText(_ target: Date?) -> String {
-        guard let target else { return "До 0.00: сейчас" }
+        guard let target else { return watchTr("До 0.00: сейчас") }
         let interval = target.timeIntervalSince(.now)
-        if interval <= 0 { return "До 0.00: сейчас" }
+        if interval <= 0 { return watchTr("До 0.00: сейчас") }
 
         let minutes = Int(interval / 60)
         let hours = minutes / 60
         let rest = minutes % 60
 
         if hours > 0 {
-            return "До 0.00 ~\(hours)ч \(rest)м"
+            return watchFmt("До 0.00 ~%dч %dм", hours, rest)
         }
-        return "До 0.00 ~\(rest)м"
+        return watchFmt("До 0.00 ~%dм", rest)
     }
 
     private func riskColor(_ risk: String) -> Color {

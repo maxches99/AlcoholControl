@@ -458,7 +458,7 @@ struct AnalyticsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Weekly goals status")
+                Text(L10n.tr("Статус недельных целей"))
                     .font(.headline)
                 limitRow(heavyMorningStatus)
                 limitRow(memoryRiskStatus)
@@ -469,7 +469,7 @@ struct AnalyticsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Recovery & risk trend")
+                Text(L10n.tr("Тренд восстановления и рисков"))
                     .font(.headline)
                 if trendSnapshots.isEmpty {
                     Text("Пока нет завершенных сессий для тренда")
@@ -512,7 +512,7 @@ struct AnalyticsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Evening process quality")
+                Text(L10n.tr("Качество процесса вечера"))
                     .font(.headline)
                 HStack(spacing: 8) {
                     metricChip(title: L10n.tr("Process quality"), value: "\(processQualityScore)/100")
@@ -551,7 +551,7 @@ struct AnalyticsView: View {
 
             if !triggerPatterns.hits.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Trigger patterns")
+                    Text(L10n.tr("Паттерны триггеров"))
                         .font(.headline)
                     Text("Паттерны, которые чаще ведут к тяжелому утру или риску памяти.")
                         .font(.caption)
@@ -584,13 +584,13 @@ struct AnalyticsView: View {
                     Text("Персональные паттерны")
                         .font(.headline)
                     HStack(spacing: 8) {
-                        trendChip(title: "Peak BAC", direction: personalizedPattern.peakTrend)
-                        trendChip(title: "Гидратация", direction: personalizedPattern.hydrationTrend)
+                        trendChip(title: L10n.tr("Пик BAC"), direction: personalizedPattern.peakTrend)
+                        trendChip(title: L10n.tr("Гидратация"), direction: personalizedPattern.hydrationTrend)
                     }
                     if let wellbeingTrend = personalizedPattern.wellbeingTrend {
-                        trendChip(title: "Чек-ин", direction: wellbeingTrend)
+                        trendChip(title: L10n.tr("Чек-ин"), direction: wellbeingTrend)
                     }
-                    Text("Streak воды: \(personalizedPattern.waterStreak) · Streak еды: \(personalizedPattern.mealStreak)")
+                    Text(L10n.format("Серия воды: %d · Серия еды: %d", personalizedPattern.waterStreak, personalizedPattern.mealStreak))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     ForEach(personalizedPattern.notes, id: \.self) { note in

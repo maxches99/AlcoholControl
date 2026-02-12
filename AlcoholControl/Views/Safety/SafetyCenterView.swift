@@ -12,12 +12,12 @@ private enum SafetySymptom: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .confusion: return "Сильная спутанность"
-        case .vomiting: return "Повторная рвота"
-        case .breathing: return "Затрудненное дыхание"
-        case .unconscious: return "Потеря сознания"
-        case .seizure: return "Судороги"
-        case .panic: return "Сильная тревога/паника"
+        case .confusion: return L10n.tr("Сильная спутанность")
+        case .vomiting: return L10n.tr("Повторная рвота")
+        case .breathing: return L10n.tr("Затрудненное дыхание")
+        case .unconscious: return L10n.tr("Потеря сознания")
+        case .seizure: return L10n.tr("Судороги")
+        case .panic: return L10n.tr("Сильная тревога/паника")
         }
     }
 }
@@ -37,15 +37,15 @@ struct SafetyCenterView: View {
 
     private var riskLevel: String {
         if selected.contains(.unconscious) || selected.contains(.breathing) || selected.contains(.seizure) {
-            return "Критично"
+            return L10n.tr("Критично")
         }
         if selected.count >= 3 {
-            return "Высокий"
+            return L10n.tr("Высокий")
         }
         if selected.isEmpty {
-            return "Наблюдение"
+            return L10n.tr("Наблюдение")
         }
-        return "Повышенный"
+        return L10n.tr("Повышенный")
     }
 
     private var hasTrustedContact: Bool {
@@ -55,7 +55,7 @@ struct SafetyCenterView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Crisis mode") {
+                Section(L10n.tr("Кризисный режим")) {
                     Toggle("Мне нужна помощь прямо сейчас", isOn: $crisisMode)
                     if crisisMode {
                         Text("Сразу перейдите к безопасности: остановитесь, позовите человека рядом и вызовите помощь при ухудшении.")
@@ -133,7 +133,7 @@ struct SafetyCenterView: View {
                     }
                 }
             }
-            .navigationTitle("Safety Center")
+            .navigationTitle(L10n.tr("Центр безопасности"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Закрыть") { dismiss() }
@@ -173,11 +173,11 @@ struct SafetyCenterView: View {
 
     private var riskColor: Color {
         switch riskLevel {
-        case "Критично":
+        case let level where level == L10n.tr("Критично"):
             return .red
-        case "Высокий":
+        case let level where level == L10n.tr("Высокий"):
             return .orange
-        case "Повышенный":
+        case let level where level == L10n.tr("Повышенный"):
             return .yellow
         default:
             return .green

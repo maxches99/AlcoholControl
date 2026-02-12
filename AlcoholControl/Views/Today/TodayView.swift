@@ -249,7 +249,7 @@ struct TodayView: View {
                     } label: {
                         Image(systemName: "cross.case.fill")
                     }
-                    .accessibilityLabel("Открыть Safety Center")
+                    .accessibilityLabel(L10n.tr("Открыть центр безопасности"))
                 }
                 if let session = activeSession {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -653,7 +653,7 @@ struct TodayView: View {
             Text("Текущая оценка BAC очень высокая. Следите за состоянием и не оставайтесь в одиночку.")
                 .font(.subheadline)
             HStack {
-                Button("Safety Center") {
+                Button(L10n.tr("Центр безопасности")) {
                     activeSheet = .safetyCenter
                 }
                 .buttonStyle(.bordered)
@@ -664,7 +664,7 @@ struct TodayView: View {
                 .buttonStyle(.borderedProminent)
             }
             if !trustedContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Можно быстро связаться с доверенным контактом из Safety Center.")
+                Text(L10n.tr("Можно быстро связаться с доверенным контактом из центра безопасности."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1208,7 +1208,7 @@ struct TodayView: View {
         guard let session = activeSession else {
             if safetyRequested {
                 activeSheet = .safetyCenter
-                infoMessage = L10n.tr("С часов пришел запрос открыть Safety Center")
+                infoMessage = L10n.tr("С часов пришел запрос открыть центр безопасности")
             }
             if let pauseMinutes {
                 Task {
@@ -1262,7 +1262,7 @@ struct TodayView: View {
 
         if safetyRequested {
             activeSheet = .safetyCenter
-            infoMessage = L10n.tr("С часов пришел запрос открыть Safety Center")
+            infoMessage = L10n.tr("С часов пришел запрос открыть центр безопасности")
         }
 
         if let pauseMinutes {
@@ -1631,7 +1631,7 @@ private struct EveningInsightsCard: View {
             Text("Ваш темп-порог: ~\(String(format: "%.1f", patterns.paceRiskThreshold)) ст.др./ч")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("Streak воды: \(patterns.waterStreak) · Streak еды: \(patterns.mealStreak)")
+            Text(L10n.format("Серия воды: %d · Серия еды: %d", patterns.waterStreak, patterns.mealStreak))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 

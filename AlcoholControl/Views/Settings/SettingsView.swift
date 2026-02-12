@@ -156,7 +156,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Weekly harm-reduction goals") {
+                Section(L10n.tr("Недельные цели harm-reduction")) {
                     Stepper(value: $weeklyHeavyMorningLimit, in: 0...7) {
                         HStack {
                             Text("Лимит тяжелых утр")
@@ -167,7 +167,7 @@ struct SettingsView: View {
                     }
                     Stepper(value: $weeklyHighMemoryRiskLimit, in: 0...7) {
                         HStack {
-                            Text("Лимит high memory-risk сессий")
+                            Text(L10n.tr("Лимит сессий с высоким риском памяти"))
                             Spacer()
                             Text("\(weeklyHighMemoryRiskLimit)")
                                 .foregroundStyle(.secondary)
@@ -181,20 +181,20 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("Цели используются в разделе Аналитика для weekly safety контроля.")
+                    Text(L10n.tr("Цели используются в разделе Аналитика для недельного контроля безопасности."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Безопасность") {
-                    Toggle("Safety mode", isOn: $safetyModeEnabled)
+                    Toggle(L10n.tr("Safety mode"), isOn: $safetyModeEnabled)
                     if safetyModeEnabled {
-                        Text("Более ранние risk-подсказки, акцент на паузы и воду, приоритет safety действий.")
+                        Text(L10n.tr("Более ранние подсказки риска, акцент на паузы и воду, приоритет действий безопасности."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
-                    Button("Открыть Safety Center") {
+                    Button(L10n.tr("Открыть центр безопасности")) {
                         showSafetyCenter = true
                     }
 
@@ -239,7 +239,7 @@ struct SettingsView: View {
                     Button(purchase.isPremium ? "Управлять подпиской" : "Оформить Premium") {
                         showPaywall = true
                     }
-                    Button("Restore purchases") {
+                    Button(L10n.tr("Restore purchases")) {
                         Task { await purchase.restoreFromAppStore() }
                     }
                 }
@@ -252,11 +252,11 @@ struct SettingsView: View {
                         ShareLink("Поделиться CSV", item: csvExportURL)
                     }
 
-                    Button("Экспорт JSON backup") {
+                    Button(L10n.tr("Экспорт JSON-резерва")) {
                         exportJSON()
                     }
                     if let jsonExportURL {
-                        ShareLink("Поделиться JSON backup", item: jsonExportURL)
+                        ShareLink(L10n.tr("Поделиться JSON-резервом"), item: jsonExportURL)
                     }
 
                     Button(role: .destructive) {
@@ -376,9 +376,9 @@ struct SettingsView: View {
         do {
             let url = try exportService.exportJSON(sessions: sessions, profile: profile)
             jsonExportURL = url
-            statusMessage = "JSON backup подготовлен"
+            statusMessage = L10n.tr("JSON-резерв подготовлен")
         } catch {
-            statusMessage = "Не удалось экспортировать JSON backup"
+            statusMessage = L10n.tr("Не удалось экспортировать JSON-резерв")
         }
     }
 
