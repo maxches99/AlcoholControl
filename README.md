@@ -1,22 +1,22 @@
 # AlcoholControl
 
-AlcoholControl - iOS-приложение в стиле harm-reduction для контроля вечерних сессий: оценка BAC, вода/питание, утренний чек-ин, weekly-аналитика, виджет и Apple Watch-компаньон.
+AlcoholControl is a harm-reduction iOS app for tracking evening sessions: BAC estimation, hydration/food, morning check-in, weekly safety analytics (with a shareable weekly summary), plus a widget and Apple Watch companion.
 
-## Что умеет приложение
+## What the app does
 
-- Ведение активной сессии: напитки, вода, еда, завершение сессии.
-- Оценка пикового BAC и примерного времени до `0.00`.
-- Утренний чек-ин (самочувствие, симптомы, сон, вода).
-- Уведомления: вода, bedtime-water, утренний чек-ин, smart risk nudge.
-- Интеграция с Apple Health: сон, шаги, resting HR, HRV.
-- Weekly safety-аналитика (heavy mornings, memory-risk, hydration, recovery/process scores).
-- Экспорт данных в CSV и JSON backup.
-- Подписка Premium через StoreKit (`monthly` / `yearly`).
-- Виджет и Live Activity.
-- Apple Watch быстрые действия через общий App Group.
-- Локализация: `ru`, `en`, `es`, `zh-Hans` (+ системный язык).
+- Active session tracking: drinks, water, food, session end.
+- Peak BAC estimate and approximate time to `0.00`.
+- Morning check-in (well-being, symptoms, sleep, water).
+- Notifications: water, bedtime-water, morning check-in, smart risk nudge.
+- Apple Health (HealthKit) integration: sleep, steps, resting HR, HRV.
+- Weekly safety analytics (heavy mornings, memory-risk, hydration, recovery/process scores).
+- Data export to CSV and JSON backup.
+- Premium subscription via StoreKit (`monthly` / `yearly`).
+- Widget and Live Activity.
+- Apple Watch quick actions via shared App Group.
+- Localization: `ru`, `en`, `es`, `zh-Hans` (+ system language).
 
-## Стек
+## Tech stack
 
 - SwiftUI
 - SwiftData
@@ -25,35 +25,36 @@ AlcoholControl - iOS-приложение в стиле harm-reduction для к
 - HealthKit
 - WidgetKit / ActivityKit
 
-## Требования
+## Requirements
 
 - Xcode 26.2+
-- iOS 26.0+ (основное приложение и виджет)
+- iOS 26.0+ (main app and widget)
 - watchOS 10.6+ (watch target)
-- Apple Developer аккаунт для теста покупок/entitlements на устройстве
+- Apple Developer account to test purchases/entitlements on device
 
-## Структура проекта
+## Setup
 
-- `AlcoholControl/` - основное iOS-приложение.
-- `AlcoholControlWidget/` - виджет + Live Activity UI.
-- `AlcoholControlWatch/` - watchOS-компаньон.
+1. Open `AlcoholControl.xcodeproj` in Xcode.
+2. Select the `AlcoholControl` scheme and an iPhone simulator.
+3. Run.
+4. For device testing, ensure App Group and Health permissions are enabled for your signing team.
+
+## Project structure
+
+- `AlcoholControl/` - main iOS app.
+- `AlcoholControlWidget/` - widget + Live Activity UI.
+- `AlcoholControlWatch/` - watchOS companion.
 - `AlcoholControlTests/` - unit tests.
 - `AlcoholControlUITests/` - UI tests.
-- `Config/AlcoholControlWidget-Info.plist` - Info.plist для widget target.
+- `Config/AlcoholControlWidget-Info.plist` - Info.plist for the widget target.
 
-## Быстрый старт
-
-1. Откройте `AlcoholControl.xcodeproj` в Xcode.
-2. Выберите схему `AlcoholControl` и симулятор iPhone.
-3. Запустите `Run`.
-
-## Сборка и тесты из CLI
+## Build and test from CLI
 
 ```bash
-# Список таргетов/схем
+# List targets/schemes
 xcodebuild -list -project AlcoholControl.xcodeproj
 
-# Сборка iOS приложения
+# Build the iOS app
 xcodebuild \
   -project AlcoholControl.xcodeproj \
   -scheme AlcoholControl \
@@ -61,7 +62,7 @@ xcodebuild \
   -sdk iphonesimulator \
   build
 
-# Запуск unit tests
+# Run unit tests
 xcodebuild \
   -project AlcoholControl.xcodeproj \
   -scheme AlcoholControl \
@@ -69,21 +70,34 @@ xcodebuild \
   test
 ```
 
-## Важные технические детали
+## Key technical details
 
-- Хранилище данных: SwiftData (`UserProfile`, `Session`, `DrinkEntry`, `WaterEntry`, `MealEntry`, `MorningCheckIn`, `HealthDailySnapshot`, `RiskModelRun`).
-- Общий контейнер для app/widget/watch: `group.maxches.AlcoholControl`.
-- HealthKit entitlement включён в основном приложении.
-- Виджет читает снэпшот состояния из `UserDefaults(suiteName: appGroupID)`.
-- Быстрые действия watch/widget синхронизируются через `WidgetSnapshotStore`.
+- Data store: SwiftData (`UserProfile`, `Session`, `DrinkEntry`, `WaterEntry`, `MealEntry`, `MorningCheckIn`, `HealthDailySnapshot`, `RiskModelRun`).
+- Shared container for app/widget/watch: `group.maxches.AlcoholControl`.
+- HealthKit entitlement is enabled only in the main app target.
+- The widget reads state snapshots from `UserDefaults(suiteName: appGroupID)`.
+- Watch/widget quick actions are synced via `WidgetSnapshotStore`.
 
-## Конфиденциальность и безопасность
+## Privacy and safety
 
-- Приложение ориентировано на harm-reduction и самоконтроль.
-- Оценки BAC и recovery носят ориентировочный характер и не являются медицинской рекомендацией.
-- Для полноты функций нужны разрешения на уведомления и Apple Health.
+- The app focuses on harm-reduction and self-tracking.
+- BAC and recovery estimates are approximate and not medical advice.
+- Notifications and Apple Health permissions are required for full functionality.
 
-## Статус тестов
+## Troubleshooting
 
-В `AlcoholControlTests` есть базовый шаблон теста, покрытие пока минимальное. Перед релизом рекомендуется расширить тесты для `BACCalculator`, `SessionInsightService`, экспорта и sync-логики widget/watch.
+- Build fails on HealthKit: confirm HealthKit entitlement is enabled only for the main app target and your signing team has the capability.
+- Widget/watch data not syncing: verify all targets use the same App Group ID `group.maxches.AlcoholControl` and the widget reads from `UserDefaults(suiteName: appGroupID)`.
+- StoreKit products not loading on device: ensure you are signed into App Store, and the product IDs match `com.alcoholcontrol.premium.monthly` / `com.alcoholcontrol.premium.yearly`.
+- Notifications not firing: confirm notification authorization was granted and the simulator/device is not in Focus/Do Not Disturb.
 
+## Contributing
+
+- Keep changes small and localized unless a refactor is explicitly requested.
+- Keep business logic in `Services` and UI in `Views` without duplication.
+- Route all user-facing strings through `L10n.tr(...)` / `L10n.format(...)`.
+- Preserve the harm-reduction tone and avoid medical or legal-sounding claims.
+
+## Test status
+
+`AlcoholControlTests` currently includes a basic test template; coverage is minimal. Before release, expand tests for `BACCalculator`, `SessionInsightService`, export, and widget/watch sync logic.
