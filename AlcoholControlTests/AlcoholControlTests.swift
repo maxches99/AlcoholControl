@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import AlcoholControl
 
@@ -59,6 +60,40 @@ struct AlcoholControlTests {
         #expect(state.pendingMorningCheckInSessionID == nil)
         #expect(state.pendingOpenLatestMorningCheckIn == false)
         #expect(state.pendingForecastSessionID == forecastID)
+    }
+
+    @Test @MainActor func addDrinkRecomputesBACWhenProfileArgumentIsNil() throws {
+        let container = try ModelContainer(
+            for: UserProfile.self,
+            Session.self,
+            DrinkEntry.self,
+            WaterEntry.self,
+            MealEntry.self,
+            MorningCheckIn.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let service = SessionService()
+
+        let storedProfile = UserProfile(weight: 80, sex: .male, unitSystem: .metric)
+        context.insert(storedProfile)
+
+        let session = Session()
+        context.insert(session)
+
+        service.addDrink(
+            to: session,
+            context: context,
+            profile: nil,
+            createdAt: .now,
+            volumeMl: 500,
+            abvPercent: 5,
+            title: "Beer",
+            category: .beer
+        )
+
+        #expect(session.cachedPeakBAC > 0)
+        #expect(session.cachedEstimatedSoberAt != nil)
     }
 
 }

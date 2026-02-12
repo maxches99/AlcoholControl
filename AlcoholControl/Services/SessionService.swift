@@ -171,9 +171,14 @@ struct SessionService {
     }
 
     func recompute(_ session: Session, profile: UserProfile?) {
-        guard let profile else { return }
+        guard let profile = profile ?? fetchProfile(from: session.modelContext) else { return }
         let timeline = calculator.compute(for: session, profile: profile)
         session.cachedPeakBAC = timeline.peakBAC
         session.cachedEstimatedSoberAt = timeline.estimatedSoberAt
+    }
+
+    private func fetchProfile(from context: ModelContext?) -> UserProfile? {
+        guard let context else { return nil }
+        return try? context.fetch(FetchDescriptor<UserProfile>()).first
     }
 }
