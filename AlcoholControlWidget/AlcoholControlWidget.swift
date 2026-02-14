@@ -219,12 +219,12 @@ private struct AlcoholControlWidgetEntryView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: waterProgress)
-                    Text("Вода: \(entry.waterConsumedMl)/\(entry.waterTargetMl) мл")
+                    Text(widgetFmt("Вода: %d/%d мл", entry.waterConsumedMl, entry.waterTargetMl))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Утренний риск: \(entry.riskTitle)")
+                Text(widgetFmt("Утренний риск: %@", entry.riskTitle))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 

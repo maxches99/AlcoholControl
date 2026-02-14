@@ -153,6 +153,20 @@ struct MemoryProjection: Identifiable {
     let comment: String
 }
 
+private struct PersonalLearningSnapshot {
+    let scoreDelta: Int
+    let probabilityBias: Int
+}
+
+private struct LearningFeatures {
+    let highPeak: Bool
+    let fastPace: Bool
+    let lowHydration: Bool
+    let longSession: Bool
+    let noWater: Bool
+    let noMeal: Bool
+}
+
 struct SessionInsightService {
     private let calculator = BACCalculator()
 
@@ -160,7 +174,9 @@ struct SessionInsightService {
         session: Session,
         profile: UserProfile? = nil,
         at date: Date = .now,
-        health: SessionHealthContext? = nil
+        health: SessionHealthContext? = nil,
+        history: [Session]? = nil,
+        useObservedCheckIn: Bool = true
     ) -> EveningInsightAssessment {
         let durationHours = max(0, (session.endAt ?? date).timeIntervalSince(session.startAt) / 3600)
         let standardDrinksTotal = session.drinks.reduce(0.0) { partial, drink in
@@ -268,6 +284,21 @@ struct SessionInsightService {
         if let text = mealMitigation.reason {
             morningReasons.append(text)
         }
+        let personalLearning = useObservedCheckIn
+            ? personalLearningSnapshot(
+                current: session,
+                history: history ?? [],
+                profile: profile,
+                at: date
+            )
+            : nil
+        if useObservedCheckIn,
+           session.morningCheckIn == nil,
+           let learning = personalLearning,
+           learning.scoreDelta != 0 {
+            morningScore = max(0, morningScore + learning.scoreDelta)
+            morningReasons.append(L10n.tr("Индивидуальный ориентир риска, рассчитанный по вашим предыдущим сессиям."))
+        }
 
         var memoryScore = 0
         var memoryReasons: [String] = []
@@ -324,7 +355,28 @@ struct SessionInsightService {
             memoryReasons = [L10n.tr("по текущим данным риск провалов памяти невысокий")]
         }
 
-        let morningRisk = level(forMorningScore: morningScore)
+        let modelMorningRisk = level(forMorningScore: morningScore)
+        var morningRisk = modelMorningRisk
+        var morningProbabilityPercent = riskPercent(score: morningScore, maxScore: 11)
+        var resolvedMorningReasons = morningReasons
+        if useObservedCheckIn,
+           session.morningCheckIn == nil,
+           let learning = personalLearning,
+           learning.probabilityBias != 0 {
+            let adjusted = morningProbabilityPercent + learning.probabilityBias
+            morningProbabilityPercent = Int(clamp(Double(adjusted), min: 1, max: 99).rounded())
+            morningRisk = level(forCalibratedMorningProbability: morningProbabilityPercent)
+            if !resolvedMorningReasons.contains(L10n.tr("Индивидуальный ориентир риска, рассчитанный по вашим предыдущим сессиям.")) {
+                resolvedMorningReasons.append(L10n.tr("Индивидуальный ориентир риска, рассчитанный по вашим предыдущим сессиям."))
+            }
+        }
+        if useObservedCheckIn, let checkIn = session.morningCheckIn {
+            let clampedScore = max(0, min(5, checkIn.wellbeingScore))
+            morningRisk = observedMorningRisk(for: clampedScore)
+            morningProbabilityPercent = observedMorningProbability(for: clampedScore)
+            resolvedMorningReasons.insert(L10n.format("Самочувствие: %d/5", clampedScore), at: 0)
+        }
+
         let memoryRisk = level(forMemoryScore: memoryScore)
         let riskEvents = makeRiskEvents(
             session: session,
@@ -337,10 +389,10 @@ struct SessionInsightService {
         return EveningInsightAssessment(
             morningRisk: morningRisk,
             memoryRisk: memoryRisk,
-            morningProbabilityPercent: riskPercent(score: morningScore, maxScore: 11),
+            morningProbabilityPercent: morningProbabilityPercent,
             memoryProbabilityPercent: riskPercent(score: memoryScore, maxScore: 10),
             confidence: confidence,
-            morningReasons: morningReasons,
+            morningReasons: resolvedMorningReasons,
             memoryReasons: memoryReasons,
             riskEvents: riskEvents,
             mealImpact: mealMitigation.summary,
@@ -597,7 +649,7 @@ struct SessionInsightService {
         profile: UserProfile? = nil,
         history: [Session]
     ) -> [EveningScenario] {
-        let baseline = assess(session: session, profile: profile)
+        let baseline = assess(session: session, profile: profile, history: history)
         let patterns = personalizedPatterns(current: session, history: history, profile: profile)
         let currentPace = averagePace(for: session) ?? patterns.paceRiskThreshold
         let hydration = hydrationProgress(for: session, profile: profile)
@@ -658,7 +710,7 @@ struct SessionInsightService {
         history: [Session],
         horizons: [Int] = [30, 60]
     ) -> [MemoryProjection] {
-        let baseline = assess(session: session, profile: profile)
+        let baseline = assess(session: session, profile: profile, history: history)
         let patterns = personalizedPatterns(current: session, history: history, profile: profile)
         let currentPace = averagePace(for: session) ?? patterns.paceRiskThreshold
         let hydration = hydrationProgress(for: session, profile: profile)
@@ -701,7 +753,7 @@ struct SessionInsightService {
         let weekSessions = completed.filter { $0.startAt >= weekStart }
         let window = weekSessions.isEmpty ? Array(completed.prefix(7)) : weekSessions
 
-        let assessments = window.map { assess(session: $0, profile: profile, at: $0.endAt ?? .now) }
+        let assessments = window.map { assess(session: $0, profile: profile, at: $0.endAt ?? .now, history: window) }
         let heavyMorningCount = assessments.filter { $0.morningRisk == .high }.count
         let highMemoryRiskCount = assessments.filter { $0.memoryRisk == .high }.count
         let hydrationHitCount = assessments.filter { $0.waterBalance.progress >= 0.85 }.count
@@ -762,7 +814,7 @@ struct SessionInsightService {
         var riskSessions = 0
 
         for session in sample {
-            let assessment = assess(session: session, profile: profile, at: session.endAt ?? .now)
+            let assessment = assess(session: session, profile: profile, at: session.endAt ?? .now, history: sample)
             let checkInLow = (session.morningCheckIn?.wellbeingScore ?? 5) <= 2
             let isRisky = assessment.morningRisk == .high || assessment.memoryRisk == .high || checkInLow
             guard isRisky else { continue }
@@ -1221,11 +1273,137 @@ struct SessionInsightService {
         return count
     }
 
+    private func personalLearningSnapshot(
+        current session: Session,
+        history: [Session],
+        profile: UserProfile?,
+        at date: Date
+    ) -> PersonalLearningSnapshot? {
+        let training = history
+            .filter { !$0.isActive && $0.id != session.id && $0.morningCheckIn != nil }
+            .sorted(by: { $0.startAt > $1.startAt })
+        let window = Array(training.prefix(14))
+        guard window.count >= 4 else { return nil }
+
+        let currentFeatures = learningFeatures(for: session, profile: profile, at: date)
+        let roughFlags = window.map { (($0.morningCheckIn?.wellbeingScore ?? 5) <= 2) ? 1.0 : 0.0 }
+        let overallRoughRate = roughFlags.reduce(0, +) / Double(window.count)
+
+        var deltas: [Int] = []
+        func appendDelta(
+            _ isEnabled: Bool,
+            by keyPath: KeyPath<LearningFeatures, Bool>
+        ) {
+            guard isEnabled else { return }
+            let matching = window.filter {
+                learningFeatures(for: $0, profile: profile, at: $0.endAt ?? date)[keyPath: keyPath]
+            }
+            guard matching.count >= 3 else { return }
+            let roughCount = matching.filter { ($0.morningCheckIn?.wellbeingScore ?? 5) <= 2 }.count
+            let roughRate = Double(roughCount) / Double(matching.count)
+            let diff = roughRate - overallRoughRate
+            if diff >= 0.15 {
+                deltas.append(1)
+            } else if diff <= -0.15 {
+                deltas.append(-1)
+            }
+        }
+
+        appendDelta(currentFeatures.highPeak, by: \.highPeak)
+        appendDelta(currentFeatures.fastPace, by: \.fastPace)
+        appendDelta(currentFeatures.lowHydration, by: \.lowHydration)
+        appendDelta(currentFeatures.longSession, by: \.longSession)
+        appendDelta(currentFeatures.noWater, by: \.noWater)
+        appendDelta(currentFeatures.noMeal, by: \.noMeal)
+
+        let scoreDelta = max(-2, min(2, deltas.reduce(0, +)))
+
+        let modelObservedPairs = window.map { past -> (Int, Int) in
+            let model = assess(
+                session: past,
+                profile: profile,
+                at: past.endAt ?? date,
+                history: nil,
+                useObservedCheckIn: false
+            ).morningProbabilityPercent
+            let observed = observedMorningProbability(
+                for: max(0, min(5, past.morningCheckIn?.wellbeingScore ?? 5))
+            )
+            return (model, observed)
+        }
+        let avgDiff = modelObservedPairs.reduce(0.0) { partial, pair in
+            partial + Double(pair.1 - pair.0)
+        } / Double(modelObservedPairs.count)
+        let probabilityBias = max(-20, min(20, Int(avgDiff.rounded())))
+
+        if scoreDelta == 0 && probabilityBias == 0 {
+            return nil
+        }
+        return PersonalLearningSnapshot(scoreDelta: scoreDelta, probabilityBias: probabilityBias)
+    }
+
+    private func learningFeatures(
+        for session: Session,
+        profile: UserProfile?,
+        at date: Date
+    ) -> LearningFeatures {
+        let durationHours = max(0, (session.endAt ?? date).timeIntervalSince(session.startAt) / 3600)
+        let pace = averagePace(for: session) ?? 0
+        let hydration = hydrationProgress(for: session, profile: profile)
+        return LearningFeatures(
+            highPeak: session.cachedPeakBAC >= 0.16,
+            fastPace: pace >= 1.5,
+            lowHydration: hydration < 0.75,
+            longSession: durationHours >= 4,
+            noWater: session.waters.isEmpty,
+            noMeal: session.meals.isEmpty
+        )
+    }
+
     private func level(forMorningScore score: Int) -> InsightLevel {
         switch score {
         case ..<2: return .low
         case 2...4: return .medium
         default: return .high
+        }
+    }
+
+    private func level(forCalibratedMorningProbability probability: Int) -> InsightLevel {
+        switch probability {
+        case ..<30:
+            return .low
+        case 30...64:
+            return .medium
+        default:
+            return .high
+        }
+    }
+
+    private func observedMorningRisk(for wellbeingScore: Int) -> InsightLevel {
+        switch wellbeingScore {
+        case 0...2:
+            return .high
+        case 3:
+            return .medium
+        default:
+            return .low
+        }
+    }
+
+    private func observedMorningProbability(for wellbeingScore: Int) -> Int {
+        switch wellbeingScore {
+        case 5:
+            return 10
+        case 4:
+            return 25
+        case 3:
+            return 50
+        case 2:
+            return 70
+        case 1:
+            return 85
+        default:
+            return 95
         }
     }
 

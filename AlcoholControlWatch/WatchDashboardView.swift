@@ -70,7 +70,7 @@ final class WatchSnapshotStore: ObservableObject {
             updatedAt: updatedAt
         )
 
-        statusMessage = "Обновлено: \(updatedAt.formatted(date: .omitted, time: .shortened))"
+        statusMessage = watchFmt("Обновлено: %@", updatedAt.formatted(date: .omitted, time: .shortened))
     }
 
     func addWaterQuick(volumeMl: Int = 250) {
@@ -80,7 +80,7 @@ final class WatchSnapshotStore: ObservableObject {
         defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
 
         snapshot.waterConsumedMl += volumeMl
-        statusMessage = "Отправили +\(volumeMl) мл на iPhone"
+        statusMessage = watchFmt("Отправили +%d мл на iPhone", volumeMl)
     }
 
     func addDrinkQuick(volumeMl: Double, abv: Double, title: String, category: String) {
@@ -90,7 +90,7 @@ final class WatchSnapshotStore: ObservableObject {
         defaults.set(title, forKey: WatchKeys.pendingDrinkTitle)
         defaults.set(category, forKey: WatchKeys.pendingDrinkCategory)
         defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
-        statusMessage = "Отправили \(title) на iPhone"
+        statusMessage = watchFmt("Отправили %@ на iPhone", title)
     }
 
     func requestEndSession() {
@@ -125,7 +125,7 @@ final class WatchSnapshotStore: ObservableObject {
         guard let defaults else { return }
         defaults.set(minutes, forKey: WatchKeys.pendingPauseMinutes)
         defaults.set(Date.now.timeIntervalSince1970, forKey: WatchKeys.updatedAt)
-        statusMessage = "Пауза \(minutes) мин отправлена на iPhone"
+        statusMessage = watchFmt("Пауза %d мин отправлена на iPhone", minutes)
     }
 }
 
@@ -155,12 +155,12 @@ struct WatchDashboardView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         ProgressView(value: waterProgress)
-                        Text("H2O \(store.snapshot.waterConsumedMl)/\(store.snapshot.waterTargetMl) мл")
+                        Text(watchFmt("H2O %d/%d мл", store.snapshot.waterConsumedMl, store.snapshot.waterTargetMl))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("Риск утра: \(store.snapshot.risk)")
+                    Text(watchFmt("Риск утра: %@", store.snapshot.risk))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(riskColor(store.snapshot.risk))
 

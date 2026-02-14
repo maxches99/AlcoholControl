@@ -390,7 +390,12 @@ struct TodayView: View {
             sleepEfficiency: healthSleepEfficiency
         )
         let baselines = healthBaselines
-        let insights = insightService.assess(session: session, profile: profile, health: healthContext)
+        let insights = insightService.assess(
+            session: session,
+            profile: profile,
+            health: healthContext,
+            history: sessions
+        )
         let recoveryIndex = insightService.recoveryIndex(session: session, assessment: insights, health: healthContext, baselines: baselines)
         let patterns = insightService.personalizedPatterns(current: session, history: sessions, profile: profile)
         let scenarios = insightService.eveningScenarios(for: session, profile: profile, history: sessions)
@@ -450,21 +455,21 @@ struct TodayView: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    actionButton(title: "+ Напиток", icon: "wineglass.fill", tint: .orange) {
+                    actionButton(title: L10n.tr("+ Напиток"), icon: "wineglass.fill", tint: .orange) {
                         activeSheet = .addDrink(session.id)
                     }
                     .accessibilityLabel("Добавить напиток")
 
-                    actionButton(title: "+ Еда", icon: "fork.knife", tint: .brown) {
+                    actionButton(title: L10n.tr("+ Еда"), icon: "fork.knife", tint: .brown) {
                         activeSheet = .addMeal(session.id)
                     }
                     .accessibilityLabel("Добавить прием пищи")
 
-                    actionButton(title: "+ Вода", icon: "drop.fill", tint: .blue) {
+                    actionButton(title: L10n.tr("+ Вода"), icon: "drop.fill", tint: .blue) {
                         activeSheet = .addWater(session.id)
                     }
                     .accessibilityLabel("Добавить воду")
-                    actionButton(title: "Напоминания", icon: "bell", tint: .indigo) {
+                    actionButton(title: L10n.tr("Напоминания"), icon: "bell", tint: .indigo) {
                         activeSheet = .waterReminders
                     }
                     .accessibilityLabel("Открыть настройки напоминаний")
@@ -474,7 +479,7 @@ struct TodayView: View {
                     }
                     .accessibilityLabel("Поделиться карточкой")
 
-                    actionButton(title: "Повторить последний", icon: "arrow.clockwise", tint: .pink) {
+                    actionButton(title: L10n.tr("Повторить последний"), icon: "arrow.clockwise", tint: .pink) {
                         repeatLastDrink(into: session)
                     }
                     .accessibilityLabel("Повторить последний напиток")
@@ -850,34 +855,34 @@ struct TodayView: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Цели вечера")
+                Text(L10n.tr("Цели вечера"))
                     .font(.headline)
                 Spacer()
-                Text(isPastGoalTime ? "Время завершаться" : "В процессе")
+                Text(isPastGoalTime ? L10n.tr("Время завершаться") : L10n.tr("В процессе"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isPastGoalTime ? .orange : .secondary)
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Алкоголь: \(String(format: "%.1f", standardDrinks)) / \(String(format: "%.1f", goalStdDrinks)) ст.др.")
+                Text(L10n.format("Алкоголь: %.1f / %.1f ст.др.", standardDrinks, goalStdDrinks))
                     .font(.footnote)
                 ProgressView(value: drinksProgress)
                     .tint(drinksProgress > 1 ? .red : .orange)
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Вода: \(Int(consumedWaterMl)) / \(Int(goalWaterMl)) мл")
+                Text(L10n.format("Вода: %d / %d мл", Int(consumedWaterMl), Int(goalWaterMl)))
                     .font(.footnote)
                 ProgressView(value: waterProgress)
                     .tint(waterProgress >= 1 ? .green : .blue)
             }
 
             if drinksProgress >= 1 {
-                Text("Лимит по алкоголю достигнут. Лучше перейти на воду и еду.")
+                Text(L10n.tr("Лимит по алкоголю достигнут. Лучше перейти на воду и еду."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if waterProgress < 0.5 {
-                Text("Гидратация отстает. Добавьте 1-2 порции воды.")
+                Text(L10n.tr("Гидратация отстает. Добавьте 1-2 порции воды."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1157,7 +1162,7 @@ struct TodayView: View {
             category: preset.category
         )
         infoMessage = L10n.format("Быстро добавлено: %@", preset.category.label)
-        let assessment = insightService.assess(session: session, profile: profile)
+        let assessment = insightService.assess(session: session, profile: profile, history: sessions)
         Task {
             await syncSmartReminder(sessionID: session.id, insights: assessment)
         }
@@ -1582,14 +1587,14 @@ private struct EveningInsightsCard: View {
             }
 
             riskRow(
-                title: "Насколько тяжело утром",
+                title: L10n.tr("Насколько тяжело утром"),
                 level: insights.morningRisk,
                 percent: insights.morningProbabilityPercent,
                 reason: insights.morningReasons.first ?? "Данных пока мало"
             )
 
             riskRow(
-                title: "Риск провалов памяти",
+                title: L10n.tr("Риск провалов памяти"),
                 level: insights.memoryRisk,
                 percent: insights.memoryProbabilityPercent,
                 reason: insights.memoryReasons.first ?? "Данных пока мало"
@@ -1597,7 +1602,7 @@ private struct EveningInsightsCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Уверенность модели")
+                    Text(L10n.tr("Уверенность модели"))
                     Spacer()
                     Text("~\(insights.confidence.scorePercent)%")
                         .font(.subheadline.weight(.semibold))
@@ -1635,7 +1640,7 @@ private struct EveningInsightsCard: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-            Text("Еда: \(insights.mealImpact)")
+            Text(L10n.format("Еда: %@", insights.mealImpact))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -1643,7 +1648,7 @@ private struct EveningInsightsCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Водный баланс")
+                    Text(L10n.tr("Водный баланс"))
                     Spacer()
                     Text(insights.waterBalance.status.title.capitalized)
                         .font(.subheadline.weight(.semibold))
@@ -1654,10 +1659,10 @@ private struct EveningInsightsCard: View {
                     .foregroundStyle(.secondary)
                 ProgressView(value: insights.waterBalance.progress)
                 if insights.waterBalance.deficitMl > 0 {
-                    Text("Дефицит: ~\(insights.waterBalance.deficitMl) мл")
+                    Text(L10n.format("Дефицит: ~%d мл", insights.waterBalance.deficitMl))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Text("Сейчас лучше допить ~\(insights.waterBalance.suggestedTopUpMl) мл")
+                    Text(L10n.format("Сейчас лучше допить ~%d мл", insights.waterBalance.suggestedTopUpMl))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1672,7 +1677,7 @@ private struct EveningInsightsCard: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("События риска")
+                    Text(L10n.tr("События риска"))
                         .font(.subheadline.weight(.semibold))
                     ForEach(insights.riskEvents.prefix(5)) { event in
                         VStack(alignment: .leading, spacing: 3) {
@@ -1726,7 +1731,7 @@ private struct EveningInsightsCard: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Проекция риска провалов памяти")
+                    Text(L10n.tr("Проекция риска провалов памяти"))
                         .font(.subheadline.weight(.semibold))
                     ForEach(projections) { projection in
                         HStack {
@@ -2414,8 +2419,13 @@ private struct EndSessionSheet: View {
             NotificationService.shared.cancelWellbeingCheck()
             _ = await LiveSessionActivityService.shared.end(sessionID: session.id)
             WidgetSnapshotStore.clear()
+            guard remindWaterAtBed || remindMorningCheckIn else { return }
             guard profile?.notificationsEnabled == true else { return }
-            let status = await NotificationService.shared.authorizationStatus()
+            var status = await NotificationService.shared.authorizationStatus()
+            if status == .notDetermined {
+                _ = await NotificationService.shared.requestAuthorization()
+                status = await NotificationService.shared.authorizationStatus()
+            }
             guard status == .authorized || status == .provisional || status == .ephemeral else { return }
             if remindWaterAtBed {
                 await NotificationService.shared.scheduleBedtimeWater(for: session.id)

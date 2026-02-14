@@ -37,12 +37,41 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 }
 
 enum L10n {
+    private static var resolvedLanguage: AppLanguage {
+        let raw = UserDefaults.standard.string(forKey: "selectedAppLanguage") ?? AppLanguage.system.rawValue
+        return AppLanguage(rawValue: raw) ?? .system
+    }
+
+    private static var localizedBundle: Bundle {
+        switch resolvedLanguage {
+        case .system:
+            return .main
+        case .english, .spanish, .chinese, .russian:
+            guard
+                let path = Bundle.main.path(forResource: resolvedLanguage.rawValue, ofType: "lproj"),
+                let bundle = Bundle(path: path)
+            else {
+                return .main
+            }
+            return bundle
+        }
+    }
+
+    private static var formattingLocale: Locale {
+        switch resolvedLanguage {
+        case .system:
+            return .autoupdatingCurrent
+        case .english, .spanish, .chinese, .russian:
+            return resolvedLanguage.locale
+        }
+    }
+
     static func tr(_ key: String) -> String {
-        NSLocalizedString(key, comment: "")
+        NSLocalizedString(key, tableName: nil, bundle: localizedBundle, value: key, comment: "")
     }
 
     static func format(_ key: String, _ args: CVarArg...) -> String {
-        String(format: tr(key), locale: .autoupdatingCurrent, arguments: args)
+        String(format: tr(key), locale: formattingLocale, arguments: args)
     }
 }
 

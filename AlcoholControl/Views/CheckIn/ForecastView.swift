@@ -46,7 +46,12 @@ struct ForecastView: View {
     }
 
     private var assessment: EveningInsightAssessment {
-        insightService.assess(session: session, profile: profile, health: healthContext)
+        insightService.assess(
+            session: session,
+            profile: profile,
+            health: healthContext,
+            history: sessions
+        )
     }
 
     private var recoveryIndex: RecoveryIndexSnapshot {
@@ -346,16 +351,16 @@ struct ForecastView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Итог утра")
+                Text(L10n.tr("Итог утра"))
                     .font(.title2)
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        riskBadge(title: "Тяжелое утро", level: assessment.morningRisk, percent: assessment.morningProbabilityPercent)
-                        riskBadge(title: "Провалы памяти", level: assessment.memoryRisk, percent: assessment.memoryProbabilityPercent)
+                        riskBadge(title: L10n.tr("Тяжелое утро"), level: assessment.morningRisk, percent: assessment.morningProbabilityPercent)
+                        riskBadge(title: L10n.tr("Провалы памяти"), level: assessment.memoryRisk, percent: assessment.memoryProbabilityPercent)
                     }
                     HStack {
-                        Text("Уверенность модели")
+                        Text(L10n.tr("Уверенность модели"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -405,7 +410,7 @@ struct ForecastView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Персональные факторы")
+                    Text(L10n.tr("Персональные факторы"))
                         .font(.headline)
                     ForEach(personalizedFactors, id: \.title) { factor in
                         HStack(alignment: .top) {
@@ -422,7 +427,7 @@ struct ForecastView: View {
                         }
                         Divider()
                     }
-                    Text("Оценка приблизительная и не является медицинским заключением.")
+                    Text(L10n.tr("Оценка приблизительная и не является медицинским заключением."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -449,18 +454,18 @@ struct ForecastView: View {
 
                 if !recentHistorySessions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Сравнение с вашей историей")
+                        Text(L10n.tr("Сравнение с вашей историей"))
                             .font(.headline)
                         comparisonRow(
-                            title: "Ваш средний пик BAC",
-                            value: baselinePeakBAC.map { String(format: "%.3f", $0) } ?? "Нет данных"
+                            title: L10n.tr("Ваш средний пик BAC"),
+                            value: baselinePeakBAC.map { String(format: "%.3f", $0) } ?? L10n.tr("Нет данных")
                         )
                         comparisonRow(
-                            title: "Ваш средний чек-ин",
-                            value: baselineWellbeing.map { String(format: "%.1f/5", $0) } ?? "Нет данных"
+                            title: L10n.tr("Ваш средний чек-ин"),
+                            value: baselineWellbeing.map { String(format: "%.1f/5", $0) } ?? L10n.tr("Нет данных")
                         )
                         comparisonRow(
-                            title: "Гидратация сегодня",
+                            title: L10n.tr("Гидратация сегодня"),
                             value: "\(Int((currentHydrationProgress * 100).rounded()))%"
                         )
                         ForEach(historyComparisonInsights, id: \.self) { line in
@@ -476,30 +481,30 @@ struct ForecastView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Персональные пороги риска")
+                    Text(L10n.tr("Персональные пороги риска"))
                         .font(.headline)
                     comparisonRow(
-                        title: "Порог peak BAC",
+                        title: L10n.tr("Порог peak BAC"),
                         value: String(format: "%.3f", patternAssessment.peakRiskThreshold)
                     )
                     comparisonRow(
-                        title: "Порог памяти (peak BAC)",
+                        title: L10n.tr("Порог памяти (peak BAC)"),
                         value: String(format: "%.3f", patternAssessment.memoryRiskThreshold)
                     )
                     comparisonRow(
-                        title: "Порог темпа",
+                        title: L10n.tr("Порог темпа"),
                         value: String(format: "%.1f ст.др./ч", patternAssessment.paceRiskThreshold)
                     )
                     comparisonRow(
-                        title: "Личный ориентир гидратации",
+                        title: L10n.tr("Личный ориентир гидратации"),
                         value: "\(Int((patternAssessment.hydrationGoalProgress * 100).rounded()))%"
                     )
                     HStack(spacing: 8) {
-                        trendBadge(title: "Тренд peak BAC", direction: patternAssessment.peakTrend)
-                        trendBadge(title: "Тренд воды", direction: patternAssessment.hydrationTrend)
+                        trendBadge(title: L10n.tr("Тренд peak BAC"), direction: patternAssessment.peakTrend)
+                        trendBadge(title: L10n.tr("Тренд воды"), direction: patternAssessment.hydrationTrend)
                     }
                     if let wellbeingTrend = patternAssessment.wellbeingTrend {
-                        trendBadge(title: "Тренд чек-ина", direction: wellbeingTrend)
+                        trendBadge(title: L10n.tr("Тренд чек-ина"), direction: wellbeingTrend)
                     }
                     Text(L10n.format("Серия воды: %d · Серия еды: %d", patternAssessment.waterStreak, patternAssessment.mealStreak))
                         .font(.footnote)
@@ -512,14 +517,14 @@ struct ForecastView: View {
 
                 if let checkIn = session.morningCheckIn {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Ваш утренний чек-ин")
+                        Text(L10n.tr("Ваш утренний чек-ин"))
                             .font(.headline)
-                        Text("Самочувствие: \(checkIn.wellbeingScore)/5")
+                        Text(L10n.format("Самочувствие: %d/5", checkIn.wellbeingScore))
                         if !checkIn.symptoms.isEmpty {
-                            Text("Симптомы: \(checkIn.symptoms.map { $0.label }.joined(separator: ", "))")
+                            Text(L10n.format("Симптомы: %@", checkIn.symptoms.map { $0.label }.joined(separator: ", ")))
                         }
                         if let sleep = checkIn.sleepHours {
-                            Text("Сон: \(sleep, format: .number) ч")
+                            Text(L10n.format("Сон: %.1f ч", sleep))
                         }
                     }
                     .padding()
@@ -529,7 +534,7 @@ struct ForecastView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("План восстановления")
+                    Text(L10n.tr("План восстановления"))
                         .font(.headline)
                     ForEach(recoveryActions, id: \.self) { action in
                         Text("• \(action)")
@@ -544,7 +549,7 @@ struct ForecastView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("План восстановления (2-4ч)"))
                         .font(.headline)
-                    Text("Отмечайте шаги по мере выполнения, чтобы мягче пройти восстановление.")
+                    Text(L10n.tr("Отмечайте шаги по мере выполнения, чтобы мягче пройти восстановление."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(recoveryChecklist) { item in
@@ -569,7 +574,7 @@ struct ForecastView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Почему такой прогноз")
+                    Text(L10n.tr("Почему такой прогноз"))
                         .font(.headline)
                     ForEach(assessment.morningReasons + Array(assessment.memoryReasons.prefix(1)), id: \.self) { reason in
                         Text("• \(reason)")
@@ -583,7 +588,7 @@ struct ForecastView: View {
 
                 if !assessment.riskEvents.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("События, повлиявшие на прогноз")
+                        Text(L10n.tr("События, повлиявшие на прогноз"))
                             .font(.headline)
                         ForEach(assessment.riskEvents.prefix(4)) { event in
                             VStack(alignment: .leading, spacing: 3) {
@@ -611,7 +616,7 @@ struct ForecastView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
 
-                Text("Оценка приблизительная, не медицинская. Не использовать для решения, можно ли водить.")
+                Text(L10n.tr("Оценка приблизительная, не медицинская. Не использовать для решения, можно ли водить."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -626,7 +631,7 @@ struct ForecastView: View {
                 } label: {
                     Image(systemName: "questionmark.circle")
                 }
-                .accessibilityLabel("Подсказки по терминам")
+                .accessibilityLabel(L10n.tr("Подсказки по терминам"))
             }
         }
         .overlay(alignment: .topTrailing) {

@@ -137,7 +137,8 @@ struct AnalyticsView: View {
                 session: session,
                 profile: profile,
                 at: session.endAt ?? .now,
-                health: healthContext
+                health: healthContext,
+                history: sessions
             )
             let recovery = insightService.recoveryIndex(
                 session: session,
@@ -266,7 +267,7 @@ struct AnalyticsView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Аналитика")
+            .navigationTitle(L10n.tr("Аналитика"))
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
@@ -306,15 +307,15 @@ struct AnalyticsView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ваши тренды")
+            Text(L10n.tr("Ваши тренды"))
                 .font(.headline)
-            Text("Оценка по последним сессиям. Все значения приблизительные.")
+            Text(L10n.tr("Оценка по последним сессиям. Все значения приблизительные."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
-                metricChip(title: "Ср. peak BAC", value: avgPeakBAC > 0 ? String(format: "%.3f", avgPeakBAC) : "Нет")
-                metricChip(title: "Ср. вода", value: String(format: "%.1f", avgWaterMarks))
-                metricChip(title: "Сессий", value: "\(sessions.count)")
+                metricChip(title: L10n.tr("Ср. peak BAC"), value: avgPeakBAC > 0 ? String(format: "%.3f", avgPeakBAC) : L10n.tr("Нет"))
+                metricChip(title: L10n.tr("Ср. вода"), value: String(format: "%.1f", avgWaterMarks))
+                metricChip(title: L10n.tr("Сессий"), value: "\(sessions.count)")
             }
             Text(weeklySnapshot.headline)
                 .font(.caption)
@@ -334,15 +335,15 @@ struct AnalyticsView: View {
 
     private var premiumContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Premium аналитика")
+            Text(L10n.tr("Premium аналитика"))
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Пик BAC по сессиям")
+                Text(L10n.tr("Пик BAC по сессиям"))
                     .font(.headline)
 
                 if recentSessions.isEmpty {
-                    Text("Пока нет данных для графика")
+                    Text(L10n.tr("Пока нет данных для графика"))
                         .foregroundStyle(.secondary)
                 } else {
                     VStack(spacing: 8) {
@@ -375,14 +376,14 @@ struct AnalyticsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Вода по сессиям")
+                Text(L10n.tr("Вода по сессиям"))
                     .font(.headline)
 
                 ForEach(recentSessions) { session in
                     HStack {
                         Text(session.startAt, format: .dateTime.month().day())
                         Spacer()
-                        Text("\(session.waters.count) отметок воды")
+                        Text(L10n.format("%d отметок воды", session.waters.count))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -403,10 +404,10 @@ struct AnalyticsView: View {
                     metricChip(title: L10n.tr("Meal coverage"), value: "\(weeklySnapshot.mealCoveragePercent)%")
                 }
                 HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Avg peak"), value: weeklySnapshot.averagePeakBAC > 0 ? String(format: "%.3f", weeklySnapshot.averagePeakBAC) : "Нет")
+                    metricChip(title: L10n.tr("Avg peak"), value: weeklySnapshot.averagePeakBAC > 0 ? String(format: "%.3f", weeklySnapshot.averagePeakBAC) : L10n.tr("Нет"))
                     metricChip(
                         title: L10n.tr("Avg check-in"),
-                        value: weeklySnapshot.averageWellbeingScore.map { String(format: "%.1f/5", $0) } ?? "Нет"
+                        value: weeklySnapshot.averageWellbeingScore.map { String(format: "%.1f/5", $0) } ?? L10n.tr("Нет")
                     )
                 }
             }
@@ -428,7 +429,7 @@ struct AnalyticsView: View {
                 HStack(spacing: 8) {
                     metricChip(
                         title: L10n.tr("Среднее шагов"),
-                        value: averageRecoverySteps.map { "\($0)" } ?? "Нет"
+                        value: averageRecoverySteps.map { "\($0)" } ?? L10n.tr("Нет")
                     )
                     metricChip(
                         title: L10n.tr("Покрытие шагов"),
@@ -472,7 +473,7 @@ struct AnalyticsView: View {
                 Text(L10n.tr("Тренд восстановления и рисков"))
                     .font(.headline)
                 if trendSnapshots.isEmpty {
-                    Text("Пока нет завершенных сессий для тренда")
+                    Text(L10n.tr("Пока нет завершенных сессий для тренда"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(trendSnapshots) { item in
@@ -553,7 +554,7 @@ struct AnalyticsView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L10n.tr("Паттерны триггеров"))
                         .font(.headline)
-                    Text("Паттерны, которые чаще ведут к тяжелому утру или риску памяти.")
+                    Text(L10n.tr("Паттерны, которые чаще ведут к тяжелому утру или риску памяти."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(triggerPatterns.hits) { hit in
@@ -581,7 +582,7 @@ struct AnalyticsView: View {
 
             if let personalizedPattern {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Персональные паттерны")
+                    Text(L10n.tr("Персональные паттерны"))
                         .font(.headline)
                     HStack(spacing: 8) {
                         trendChip(title: L10n.tr("Пик BAC"), direction: personalizedPattern.peakTrend)
@@ -604,7 +605,7 @@ struct AnalyticsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
-            Button("Открыть Premium: Привычки") {
+            Button(L10n.tr("Открыть Premium: Привычки")) {
                 showingHabits = true
             }
             .buttonStyle(.borderedProminent)
@@ -613,17 +614,17 @@ struct AnalyticsView: View {
 
     private var lockedContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Premium аналитика")
+            Text(L10n.tr("Premium аналитика"))
                 .font(.title2)
 
-            Text("Откройте детальные тренды BAC, динамику воды и персональные паттерны.")
+            Text(L10n.tr("Откройте детальные тренды BAC, динамику воды и персональные паттерны."))
                 .foregroundStyle(.secondary)
 
-            lockedCard(title: "Пик BAC по неделям")
-            lockedCard(title: "Распределение напитков")
-            lockedCard(title: "Связь воды и самочувствия")
+            lockedCard(title: L10n.tr("Пик BAC по неделям"))
+            lockedCard(title: L10n.tr("Распределение напитков"))
+            lockedCard(title: L10n.tr("Связь воды и самочувствия"))
 
-            Button("Открыть Paywall") {
+            Button(L10n.tr("Открыть Paywall")) {
                 showingPaywall = true
             }
             .buttonStyle(.borderedProminent)
@@ -641,7 +642,7 @@ struct AnalyticsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .foregroundStyle(.primary)
-                    Text("Доступно в Premium")
+                    Text(L10n.tr("Доступно в Premium"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -837,26 +838,26 @@ private struct PremiumHabitsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Привычки за неделю")
+                    Text(L10n.tr("Привычки за неделю"))
                         .font(.title2)
 
                     habitCard(
-                        title: "Гидратация",
-                        subtitle: "Цель: >= \(Int((hydrationGoalProgress * 100).rounded()))% водного баланса",
+                        title: L10n.tr("Гидратация"),
+                        subtitle: L10n.format("Цель: >= %d%% водного баланса", Int((hydrationGoalProgress * 100).rounded())),
                         value: hydrationHits,
                         total: goalTarget,
                         tint: .blue
                     )
                     habitCard(
-                        title: "Прием пищи",
-                        subtitle: "Цель: отмечать еду в сессии",
+                        title: L10n.tr("Прием пищи"),
+                        subtitle: L10n.tr("Цель: отмечать еду в сессии"),
                         value: mealHits,
                         total: goalTarget,
                         tint: .brown
                     )
                     habitCard(
-                        title: "Умеренный темп",
-                        subtitle: "Цель: темп ниже персонального порога",
+                        title: L10n.tr("Умеренный темп"),
+                        subtitle: L10n.tr("Цель: темп ниже персонального порога"),
                         value: paceHits,
                         total: goalTarget,
                         tint: .green
@@ -864,7 +865,7 @@ private struct PremiumHabitsView: View {
 
                     if let pattern {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Персональные советы")
+                            Text(L10n.tr("Персональные советы"))
                                 .font(.headline)
                             ForEach(pattern.actions, id: \.self) { action in
                                 Text("• \(action)")
@@ -878,16 +879,16 @@ private struct PremiumHabitsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
 
-                    Text("Сессий за 7 дней: \(weekSessionsCount)")
+                    Text(L10n.format("Сессий за 7 дней: %d", weekSessionsCount))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
                 .padding()
             }
-            .navigationTitle("Premium Привычки")
+            .navigationTitle(L10n.tr("Premium Привычки"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
+                    Button(L10n.tr("Закрыть")) { dismiss() }
                 }
             }
         }

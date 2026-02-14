@@ -19,9 +19,9 @@ struct MorningCheckInView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Самочувствие") {
-                    Picker("Оценка", selection: $wellbeing) {
-                        Text("Выберите").tag(Int?.none)
+                Section(L10n.tr("Самочувствие")) {
+                    Picker(L10n.tr("Оценка"), selection: $wellbeing) {
+                        Text(L10n.tr("Выберите")).tag(Int?.none)
                         ForEach(0...5, id: \.self) { score in
                             Text("\(score)").tag(Int?.some(score))
                         }
@@ -29,7 +29,7 @@ struct MorningCheckInView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Симптомы (опционально)") {
+                Section(L10n.tr("Симптомы (опционально)")) {
                     ForEach(MorningCheckIn.Symptom.allCases.filter { $0 != .none }) { symptom in
                         Toggle(symptom.label, isOn: Binding(
                             get: { selectedSymptoms.contains(symptom) },
@@ -44,21 +44,21 @@ struct MorningCheckInView: View {
                     }
                 }
 
-                Section("Дополнительно (опционально)") {
+                Section(L10n.tr("Дополнительно (опционально)")) {
                     Stepper(value: $sleepHours, in: 0...14, step: 0.5) {
                         HStack {
-                            Text("Сон")
+                            Text(L10n.tr("Сон"))
                             Spacer()
-                            Text(String(format: "%.1f ч", sleepHours))
+                            Text(L10n.format("%.1f ч", sleepHours))
                         }
                     }
 
-                    Button(isHealthLoading ? "Импортируем..." : "Импортировать сон из Apple Health") {
+                    Button(isHealthLoading ? L10n.tr("Импортируем...") : L10n.tr("Импортировать сон из Apple Health")) {
                         Task { await importSleepFromHealth() }
                     }
                     .disabled(isHealthLoading)
 
-                    Toggle("Пил(а) воду", isOn: $hadWater)
+                    Toggle(L10n.tr("Пил(а) воду"), isOn: $hadWater)
 
                     if !healthStatus.isEmpty {
                         Text(healthStatus)
@@ -68,23 +68,23 @@ struct MorningCheckInView: View {
                 }
 
                 Section {
-                    Button("Готово") {
+                    Button(L10n.tr("Готово")) {
                         save()
                     }
                 }
             }
-            .navigationTitle("Утренний чек-ин")
+            .navigationTitle(L10n.tr("Утренний чек-ин"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") {
+                    Button(L10n.tr("Закрыть")) {
                         dismiss()
                     }
                 }
             }
-            .alert("Заполните оценку", isPresented: $showValidation) {
-                Button("Ок", role: .cancel) {}
+            .alert(L10n.tr("Заполните оценку"), isPresented: $showValidation) {
+                Button(L10n.tr("Ок"), role: .cancel) {}
             } message: {
-                Text("Выберите wellbeing score от 0 до 5.")
+                Text(L10n.tr("Выберите wellbeing score от 0 до 5."))
             }
         }
     }

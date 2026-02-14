@@ -81,47 +81,47 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Профиль") {
-                    Picker("Единицы", selection: $unitSystem) {
-                        Text("Метрические").tag(UserProfile.UnitSystem.metric)
-                        Text("Имперские").tag(UserProfile.UnitSystem.imperial)
+                Section(L10n.tr("Профиль")) {
+                    Picker(L10n.tr("Единицы"), selection: $unitSystem) {
+                        Text(L10n.tr("Метрические")).tag(UserProfile.UnitSystem.metric)
+                        Text(L10n.tr("Имперские")).tag(UserProfile.UnitSystem.imperial)
                     }
 
                     Stepper(value: $weight, in: 30...200, step: 1) {
                         HStack {
-                            Text("Вес")
+                            Text(L10n.tr("Вес"))
                             Spacer()
                             Text(String(format: "%.0f %@", weight, unitSystem == .metric ? "кг" : "lbs"))
                         }
                     }
 
-                    Picker("Пол (опционально)", selection: $sex) {
+                    Picker(L10n.tr("Пол (опционально)"), selection: $sex) {
                         ForEach(UserProfile.BiologicalSex.allCases) { value in
                             Text(value.label).tag(value)
                         }
                     }
                 }
 
-                Section("Язык") {
-                    Picker("Язык приложения", selection: $selectedAppLanguage) {
+                Section(L10n.tr("Язык")) {
+                    Picker(L10n.tr("Язык приложения"), selection: $selectedAppLanguage) {
                         ForEach(AppLanguage.allCases) { language in
                             Text(language.title).tag(language.rawValue)
                         }
                     }
                 }
 
-                Section("Уведомления") {
-                    NavigationLink("Настройки уведомлений") {
+                Section(L10n.tr("Уведомления")) {
+                    NavigationLink(L10n.tr("Настройки уведомлений")) {
                         NotificationsSettingsView()
                     }
                 }
 
-                Section("Цели вечера") {
-                    Toggle("Pre-session plan", isOn: $preSessionPlanEnabled)
+                Section(L10n.tr("Цели вечера")) {
+                    Toggle(L10n.tr("Pre-session plan"), isOn: $preSessionPlanEnabled)
 
                     Stepper(value: $goalStdDrinks, in: 1...12, step: 0.5) {
                         HStack {
-                            Text("Лимит алкоголя")
+                            Text(L10n.tr("Лимит алкоголя"))
                             Spacer()
                             Text(String(format: "%.1f ст.др.", goalStdDrinks))
                                 .foregroundStyle(.secondary)
@@ -130,7 +130,7 @@ struct SettingsView: View {
 
                     Stepper(value: $goalWaterMl, in: 400...3000, step: 100) {
                         HStack {
-                            Text("Цель воды")
+                            Text(L10n.tr("Цель воды"))
                             Spacer()
                             Text("\(Int(goalWaterMl)) мл")
                                 .foregroundStyle(.secondary)
@@ -139,7 +139,7 @@ struct SettingsView: View {
 
                     Stepper(value: $goalEndHour, in: 0...23) {
                         HStack {
-                            Text("План завершить до")
+                            Text(L10n.tr("План завершить до"))
                             Spacer()
                             Text(String(format: "%02d:00", goalEndHour))
                                 .foregroundStyle(.secondary)
@@ -148,7 +148,7 @@ struct SettingsView: View {
 
                     Stepper(value: $autoFinishSuggestionHours, in: 2...12) {
                         HStack {
-                            Text("Авто-подсказка завершить через")
+                            Text(L10n.tr("Авто-подсказка завершить через"))
                             Spacer()
                             Text("\(autoFinishSuggestionHours) ч")
                                 .foregroundStyle(.secondary)
@@ -159,7 +159,7 @@ struct SettingsView: View {
                 Section(L10n.tr("Недельные цели harm-reduction")) {
                     Stepper(value: $weeklyHeavyMorningLimit, in: 0...7) {
                         HStack {
-                            Text("Лимит тяжелых утр")
+                            Text(L10n.tr("Лимит тяжелых утр"))
                             Spacer()
                             Text("\(weeklyHeavyMorningLimit)")
                                 .foregroundStyle(.secondary)
@@ -175,7 +175,7 @@ struct SettingsView: View {
                     }
                     Stepper(value: $weeklyHydrationHitTarget, in: 40...100, step: 5) {
                         HStack {
-                            Text("Цель гидратации в неделю")
+                            Text(L10n.tr("Цель гидратации в неделю"))
                             Spacer()
                             Text("\(weeklyHydrationHitTarget)%")
                                 .foregroundStyle(.secondary)
@@ -186,7 +186,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Безопасность") {
+                Section(L10n.tr("Безопасность")) {
                     Toggle(L10n.tr("Safety mode"), isOn: $safetyModeEnabled)
                     if safetyModeEnabled {
                         Text(L10n.tr("Более ранние подсказки риска, акцент на паузы и воду, приоритет действий безопасности."))
@@ -198,21 +198,21 @@ struct SettingsView: View {
                         showSafetyCenter = true
                     }
 
-                    TextField("Имя доверенного контакта", text: $trustedContactName)
+                    TextField(L10n.tr("Имя доверенного контакта"), text: $trustedContactName)
                         .textInputAutocapitalization(.words)
 
-                    TextField("Телефон доверенного контакта", text: $trustedContactPhone)
+                    TextField(L10n.tr("Телефон доверенного контакта"), text: $trustedContactPhone)
                         .keyboardType(.phonePad)
 
                     if !trustedContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button("Проверить звонок контакту") {
+                        Button(L10n.tr("Проверить звонок контакту")) {
                             callTrustedContact()
                         }
                     }
                 }
 
-                Section("Интеграции") {
-                    Toggle("Live Activity (beta)", isOn: $liveActivityEnabled)
+                Section(L10n.tr("Интеграции")) {
+                    Toggle(L10n.tr("Live Activity (beta)"), isOn: $liveActivityEnabled)
                     Toggle(isOn: $syncWaterWithHealth) {
                         Text(L10n.tr("Синхронизировать воду с Apple Health"))
                     }
@@ -223,20 +223,20 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Button(connectingHealth ? "Подключаем Apple Health..." : "Подключить Apple Health (сон / вода / шаги / пульс)") {
+                    Button(connectingHealth ? L10n.tr("Подключаем Apple Health...") : L10n.tr("Подключить Apple Health (сон / вода / шаги / пульс)")) {
                         Task { await connectHealthKit() }
                     }
                     .disabled(connectingHealth)
                 }
 
-                Section("Приватность") {
-                    Toggle("Скрывать BAC в шаринге", isOn: $hideBACInSharing)
+                Section(L10n.tr("Приватность")) {
+                    Toggle(L10n.tr("Скрывать BAC в шаринге"), isOn: $hideBACInSharing)
                 }
 
-                Section("Подписка") {
-                    Text(purchase.isPremium ? "Статус: Premium активен" : "Статус: базовый")
+                Section(L10n.tr("Подписка")) {
+                    Text(purchase.isPremium ? L10n.tr("Статус: Premium активен") : L10n.tr("Статус: базовый"))
                         .foregroundStyle(.secondary)
-                    Button(purchase.isPremium ? "Управлять подпиской" : "Оформить Premium") {
+                    Button(purchase.isPremium ? L10n.tr("Управлять подпиской") : L10n.tr("Оформить Premium")) {
                         showPaywall = true
                     }
                     Button(L10n.tr("Restore purchases")) {
@@ -244,12 +244,12 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Управление данными") {
-                    Button("Экспорт CSV") {
+                Section(L10n.tr("Управление данными")) {
+                    Button(L10n.tr("Экспорт CSV")) {
                         exportCSV()
                     }
                     if let csvExportURL {
-                        ShareLink("Поделиться CSV", item: csvExportURL)
+                        ShareLink(L10n.tr("Поделиться CSV"), item: csvExportURL)
                     }
 
                     Button(L10n.tr("Экспорт JSON-резерва")) {
@@ -262,7 +262,7 @@ struct SettingsView: View {
                     Button(role: .destructive) {
                         showDeleteConfirm = true
                     } label: {
-                        Text("Удалить все данные")
+                        Text(L10n.tr("Удалить все данные"))
                     }
                 }
 
@@ -274,7 +274,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .navigationTitle("Настройки")
+            .navigationTitle(L10n.tr("Настройки"))
             .task {
                 await loadInitialStateIfNeeded()
                 await purchase.restore()
@@ -283,13 +283,13 @@ struct SettingsView: View {
             .onChange(of: unitSystem) { _, _ in saveProfileAndRecompute() }
             .onChange(of: sex) { _, _ in saveProfileAndRecompute() }
             .onChange(of: hideBACInSharing) { _, _ in saveProfileAndRecompute() }
-            .alert("Удалить все данные?", isPresented: $showDeleteConfirm) {
-                Button("Удалить", role: .destructive) {
+            .alert(L10n.tr("Удалить все данные?"), isPresented: $showDeleteConfirm) {
+                Button(L10n.tr("Удалить"), role: .destructive) {
                     deleteAllData()
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L10n.tr("Отмена"), role: .cancel) {}
             } message: {
-                Text("Удалятся все сессии, записи и чек-ины. Подписка сохранится отдельно.")
+                Text(L10n.tr("Удалятся все сессии, записи и чек-ины. Подписка сохранится отдельно."))
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
