@@ -14,6 +14,7 @@ AlcoholControl is a harm-reduction iOS app for tracking evening sessions: BAC es
 - Premium subscription via StoreKit (`monthly` / `yearly`).
 - Widget and Live Activity.
 - Apple Watch quick actions via shared App Group.
+- CoreML shadow forecast (separate from the main risk estimate) with quality tracking.
 - Localization: `ru`, `en`, `es`, `zh-Hans` (+ system language).
 
 ## Tech stack
@@ -68,6 +69,9 @@ xcodebuild \
   -scheme AlcoholControl \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
   test
+
+# Regenerate CoreML shadow models
+./Scripts/generate_shadow_models.sh
 ```
 
 ## Key technical details
@@ -96,6 +100,7 @@ xcodebuild \
 - Keep changes small and localized unless a refactor is explicitly requested.
 - Keep business logic in `Services` and UI in `Views` without duplication.
 - Route all user-facing strings through `L10n.tr(...)` / `L10n.format(...)`.
+- If you change CoreML shadow features/weights, regenerate `AlcoholControl/ML/*.mlmodel`.
 - Preserve the harm-reduction tone and avoid medical or legal-sounding claims.
 
 ## Test status

@@ -167,6 +167,53 @@ struct MemoryProjection: Identifiable {
     let comment: String
 }
 
+protocol ShadowRiskPredicting {
+    func delta(outputName: String, features: [String: Double]) -> Double?
+}
+
+private struct CoreMLShadowPredictor: ShadowRiskPredicting {
+    private let morningModel: MLModel?
+    private let memoryModel: MLModel?
+
+    init(
+        morningModel: MLModel? = loadCompiledModel(named: "ShadowMorningRegressor"),
+        memoryModel: MLModel? = loadCompiledModel(named: "ShadowMemoryRegressor")
+    ) {
+        self.morningModel = morningModel
+        self.memoryModel = memoryModel
+    }
+
+    func delta(outputName: String, features: [String: Double]) -> Double? {
+        let model: MLModel?
+        if outputName == "morningDelta" {
+            model = morningModel
+        } else if outputName == "memoryDelta" {
+            model = memoryModel
+        } else {
+            model = nil
+        }
+        guard let model else { return nil }
+
+        let payload = features.reduce(into: [String: Any]()) { partial, item in
+            partial[item.key] = item.value
+        }
+        guard let provider = try? MLDictionaryFeatureProvider(dictionary: payload),
+              let result = try? model.prediction(from: provider)
+        else {
+            return nil
+        }
+        if let direct = result.featureValue(for: outputName)?.doubleValue {
+            return clamp(direct, min: 0, max: 1)
+        }
+        for outputKey in model.modelDescription.outputDescriptionsByName.keys {
+            if let value = result.featureValue(for: outputKey)?.doubleValue {
+                return clamp(value, min: 0, max: 1)
+            }
+        }
+        return nil
+    }
+}
+
 private struct PersonalLearningSnapshot {
     let scoreDelta: Int
     let probabilityBias: Int
@@ -183,8 +230,11 @@ private struct LearningFeatures {
 
 struct SessionInsightService {
     private let calculator = BACCalculator()
-    private static let shadowMorningModel = loadCompiledModel(named: "ShadowMorningRegressor")
-    private static let shadowMemoryModel = loadCompiledModel(named: "ShadowMemoryRegressor")
+    private let shadowPredictor: any ShadowRiskPredicting
+
+    init(shadowPredictor: any ShadowRiskPredicting = CoreMLShadowPredictor()) {
+        self.shadowPredictor = shadowPredictor
+    }
 
     func assess(
         session: Session,
@@ -613,16 +663,8 @@ struct SessionInsightService {
             "noMeal": noMealFlag
         ]
 
-        let coreMLMorningDelta = coreMLDelta(
-            model: Self.shadowMorningModel,
-            outputName: "morningDelta",
-            features: modelFeatures
-        )
-        let coreMLMemoryDelta = coreMLDelta(
-            model: Self.shadowMemoryModel,
-            outputName: "memoryDelta",
-            features: modelFeatures
-        )
+        let coreMLMorningDelta = shadowPredictor.delta(outputName: "morningDelta", features: modelFeatures)
+        let coreMLMemoryDelta = shadowPredictor.delta(outputName: "memoryDelta", features: modelFeatures)
 
         let morningDelta = coreMLMorningDelta ?? sigmoid(
             -1.35 +
@@ -1509,7 +1551,7 @@ struct SessionInsightService {
         }
     }
 
-    private func observedMorningProbability(for wellbeingScore: Int) -> Int {
+    func observedMorningProbability(for wellbeingScore: Int) -> Int {
         switch wellbeingScore {
         case 5:
             return 10
@@ -1557,42 +1599,6 @@ struct SessionInsightService {
         1 / (1 + exp(-x))
     }
 
-    private func coreMLDelta(
-        model: MLModel?,
-        outputName: String,
-        features: [String: Double]
-    ) -> Double? {
-        guard let model else { return nil }
-        let payload = features.reduce(into: [String: Any]()) { partial, item in
-            partial[item.key] = item.value
-        }
-        guard let provider = try? MLDictionaryFeatureProvider(dictionary: payload),
-              let result = try? model.prediction(from: provider)
-        else {
-            return nil
-        }
-        if let direct = result.featureValue(for: outputName)?.doubleValue {
-            return clamp(direct, min: 0, max: 1)
-        }
-        for outputKey in model.modelDescription.outputDescriptionsByName.keys {
-            if let value = result.featureValue(for: outputKey)?.doubleValue {
-                return clamp(value, min: 0, max: 1)
-            }
-        }
-        return nil
-    }
-
-    private static func loadCompiledModel(named name: String) -> MLModel? {
-        let bundles: [Bundle] = [.main, Bundle(for: ShadowModelBundleMarker.self)]
-        for bundle in bundles {
-            if let url = bundle.url(forResource: name, withExtension: "mlmodelc"),
-               let model = try? MLModel(contentsOf: url) {
-                return model
-            }
-        }
-        return nil
-    }
-
     private func weightInKg(_ profile: UserProfile?) -> Double {
         guard let profile else { return 70 }
         switch profile.unitSystem {
@@ -1605,6 +1611,21 @@ struct SessionInsightService {
 }
 
 private final class ShadowModelBundleMarker {}
+
+private func loadCompiledModel(named name: String) -> MLModel? {
+    let bundles: [Bundle] = [.main, Bundle(for: ShadowModelBundleMarker.self)]
+    for bundle in bundles {
+        if let url = bundle.url(forResource: name, withExtension: "mlmodelc"),
+           let model = try? MLModel(contentsOf: url) {
+            return model
+        }
+    }
+    return nil
+}
+
+private func clamp(_ value: Double, min minValue: Double, max maxValue: Double) -> Double {
+    Swift.max(minValue, Swift.min(maxValue, value))
+}
 
 private struct MealMitigation {
     let scoreReduction: Int

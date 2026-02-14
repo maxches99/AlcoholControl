@@ -771,3 +771,17 @@
 "Недостаточно данных: добавьте еще несколько завершенных сессий, и появится персональный shadow-прогноз." = "Not enough data yet: add a few more completed sessions and your personal shadow forecast will appear.";
 "Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета." = "Shadow-mode forecast: based on your data and shown separately from the main estimate.";
 "CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета." = "CoreML shadow forecast: based on your data and shown separately from the main estimate.";
+"Качество shadow-модели появится после первых утренних check-in с прогнозом." = "Shadow model quality appears after the first morning check-ins with a forecast.";
+"Сравнение с базовой моделью появится после накопления совпадающих дней." = "Comparison with the baseline model will appear after enough overlapping days are collected.";
+"Средняя ошибка ниже базовой примерно на %.1f п.п." = "Average error is lower than baseline by about %.1f pp.";
+"Средняя ошибка выше базовой примерно на %.1f п.п." = "Average error is higher than baseline by about %.1f pp.";
+"Средняя ошибка примерно на уровне базовой модели." = "Average error is roughly at the baseline model level.";
+"CoreML shadow" = "CoreML shadow";
+"Включить shadow-прогноз" = "Enable shadow forecast";
+"Версия модели: coreml-shadow-v1" = "Model version: coreml-shadow-v1";
+"Последний успешный инференс: %@" = "Last successful inference: %@";
+"Последний успешный инференс: пока нет данных" = "Last successful inference: no data yet";
+"Мин. завершенных сессий" = "Min completed sessions";
+"Мин. уверенность для UI" = "Min confidence for UI";
+"Shadow отображается только при достаточной истории и confidence-пороге; основной риск это не меняет." = "Shadow is shown only with sufficient history and confidence threshold; the main risk is not changed.";
+"MAE: %.1f п.п. · Brier: %.3f. %@" = "MAE: %.1f pp · Brier: %.3f. %@";

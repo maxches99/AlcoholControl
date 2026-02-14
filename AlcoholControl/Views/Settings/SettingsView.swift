@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Query private var waters: [WaterEntry]
     @Query private var meals: [MealEntry]
     @Query private var checkIns: [MorningCheckIn]
+    @Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)]) private var riskModelRuns: [RiskModelRun]
 
     @StateObject private var purchase = PurchaseService.shared
 
@@ -41,6 +42,10 @@ struct SettingsView: View {
     @AppStorage("weeklyHeavyMorningLimit") private var weeklyHeavyMorningLimit = 2
     @AppStorage("weeklyHighMemoryRiskLimit") private var weeklyHighMemoryRiskLimit = 2
     @AppStorage("weeklyHydrationHitTarget") private var weeklyHydrationHitTarget = 70
+    @AppStorage("shadowRiskModeEnabled") private var shadowRiskModeEnabled = true
+    @AppStorage("shadowRolloutMinHistory") private var shadowRolloutMinHistory = 5
+    @AppStorage("shadowRolloutMinConfidence") private var shadowRolloutMinConfidence = 55
+    @AppStorage("riskModelVariant") private var riskModelVariant = "A"
 
     private let service = SessionService()
     private let exportService = DataExportService()
@@ -52,6 +57,7 @@ struct SettingsView: View {
         _waters = Query()
         _meals = Query()
         _checkIns = Query()
+        _riskModelRuns = Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)])
     }
 
     private var profile: UserProfile? {
@@ -76,6 +82,51 @@ struct SettingsView: View {
         }
 
         return L10n.format("Последняя синхронизация воды: %@ (%@)", timestamp, directionText)
+    }
+
+    private var latestShadowRun: RiskModelRun? {
+        riskModelRuns.first(where: { $0.variant == "coreml-shadow-v1" })
+    }
+
+    private var shadowQualitySummary: String {
+        let shadowRuns = riskModelRuns.filter {
+            $0.variant == "coreml-shadow-v1" &&
+            $0.absoluteErrorPercent != nil &&
+            $0.brierScore != nil
+        }
+        guard !shadowRuns.isEmpty else {
+            return L10n.tr("Качество shadow-модели появится после первых утренних check-in с прогнозом.")
+        }
+
+        let shadowMAE = shadowRuns.compactMap(\.absoluteErrorPercent).map(Double.init).reduce(0, +) / Double(shadowRuns.count)
+        let shadowBrier = shadowRuns.compactMap(\.brierScore).reduce(0, +) / Double(shadowRuns.count)
+
+        let baselineByDay = Dictionary(uniqueKeysWithValues: riskModelRuns.compactMap { run -> (Date, Int)? in
+            guard run.variant == riskModelVariant, let error = run.absoluteErrorPercent else { return nil }
+            return (run.day, error)
+        })
+        let overlapping = shadowRuns.compactMap { run -> (Double, Double)? in
+            guard let shadowError = run.absoluteErrorPercent,
+                  let baselineError = baselineByDay[run.day]
+            else { return nil }
+            return (Double(shadowError), Double(baselineError))
+        }
+
+        let deltaText: String
+        if overlapping.isEmpty {
+            deltaText = L10n.tr("Сравнение с базовой моделью появится после накопления совпадающих дней.")
+        } else {
+            let delta = overlapping.map { $0.0 - $0.1 }.reduce(0, +) / Double(overlapping.count)
+            if delta < -0.01 {
+                deltaText = L10n.format("Средняя ошибка ниже базовой примерно на %.1f п.п.", abs(delta))
+            } else if delta > 0.01 {
+                deltaText = L10n.format("Средняя ошибка выше базовой примерно на %.1f п.п.", delta)
+            } else {
+                deltaText = L10n.tr("Средняя ошибка примерно на уровне базовой модели.")
+            }
+        }
+
+        return L10n.format("MAE: %.1f п.п. · Brier: %.3f. %@", shadowMAE, shadowBrier, deltaText)
     }
 
     var body: some View {
@@ -227,6 +278,48 @@ struct SettingsView: View {
                         Task { await connectHealthKit() }
                     }
                     .disabled(connectingHealth)
+                }
+
+                Section(L10n.tr("CoreML shadow")) {
+                    Toggle(L10n.tr("Включить shadow-прогноз"), isOn: $shadowRiskModeEnabled)
+                    Text(L10n.tr("Версия модели: coreml-shadow-v1"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let latestShadowRun {
+                        Text(L10n.format("Последний успешный инференс: %@", latestShadowRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.tr("Последний успешный инференс: пока нет данных"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Stepper(value: $shadowRolloutMinHistory, in: 3...20) {
+                        HStack {
+                            Text(L10n.tr("Мин. завершенных сессий"))
+                            Spacer()
+                            Text("\(shadowRolloutMinHistory)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Stepper(value: $shadowRolloutMinConfidence, in: 30...95, step: 5) {
+                        HStack {
+                            Text(L10n.tr("Мин. уверенность для UI"))
+                            Spacer()
+                            Text("\(shadowRolloutMinConfidence)%")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text(L10n.tr("Shadow отображается только при достаточной истории и confidence-пороге; основной риск это не меняет."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(shadowQualitySummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section(L10n.tr("Приватность")) {

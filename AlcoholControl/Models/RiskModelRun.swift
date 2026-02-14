@@ -11,6 +11,10 @@ final class RiskModelRun {
     var confidencePercent: Int
     var morningProbability: Int
     var memoryProbability: Int
+    var observedWellbeingScore: Int?
+    var observedMorningProbability: Int?
+    var absoluteErrorPercent: Int?
+    var brierScore: Double?
     var updatedAt: Date
 
     init(
@@ -20,6 +24,10 @@ final class RiskModelRun {
         confidencePercent: Int,
         morningProbability: Int,
         memoryProbability: Int,
+        observedWellbeingScore: Int? = nil,
+        observedMorningProbability: Int? = nil,
+        absoluteErrorPercent: Int? = nil,
+        brierScore: Double? = nil,
         updatedAt: Date = .now
     ) {
         self.id = id
@@ -28,6 +36,10 @@ final class RiskModelRun {
         self.confidencePercent = confidencePercent
         self.morningProbability = morningProbability
         self.memoryProbability = memoryProbability
+        self.observedWellbeingScore = observedWellbeingScore
+        self.observedMorningProbability = observedMorningProbability
+        self.absoluteErrorPercent = absoluteErrorPercent
+        self.brierScore = brierScore
         self.updatedAt = updatedAt
     }
 }

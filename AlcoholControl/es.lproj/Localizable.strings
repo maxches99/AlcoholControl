@@ -703,3 +703,17 @@
 "Недостаточно данных: добавьте еще несколько завершенных сессий, и появится персональный shadow-прогноз." = "Aun no hay suficientes datos: agrega algunas sesiones completadas mas y aparecera tu pronostico shadow personal.";
 "Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета." = "Pronostico en modo shadow: basado en tus datos y separado del calculo principal.";
 "CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета." = "Pronostico shadow con CoreML: basado en tus datos y separado del calculo principal.";
+"Качество shadow-модели появится после первых утренних check-in с прогнозом." = "La calidad del modelo shadow aparecera despues de los primeros check-ins matutinos con pronostico.";
+"Сравнение с базовой моделью появится после накопления совпадающих дней." = "La comparacion con el modelo base aparecera cuando se acumulen dias coincidentes.";
+"Средняя ошибка ниже базовой примерно на %.1f п.п." = "El error medio es menor que el base en aprox. %.1f pp.";
+"Средняя ошибка выше базовой примерно на %.1f п.п." = "El error medio es mayor que el base en aprox. %.1f pp.";
+"Средняя ошибка примерно на уровне базовой модели." = "El error medio esta aproximadamente al nivel del modelo base.";
+"CoreML shadow" = "CoreML shadow";
+"Включить shadow-прогноз" = "Activar pronostico shadow";
+"Версия модели: coreml-shadow-v1" = "Version del modelo: coreml-shadow-v1";
+"Последний успешный инференс: %@" = "Ultima inferencia exitosa: %@";
+"Последний успешный инференс: пока нет данных" = "Ultima inferencia exitosa: aun no hay datos";
+"Мин. завершенных сессий" = "Min. sesiones completadas";
+"Мин. уверенность для UI" = "Min. confianza para UI";
+"Shadow отображается только при достаточной истории и confidence-пороге; основной риск это не меняет." = "Shadow se muestra solo con suficiente historial y umbral de confianza; el riesgo principal no cambia.";
+"MAE: %.1f п.п. · Brier: %.3f. %@" = "MAE: %.1f pp · Brier: %.3f. %@";

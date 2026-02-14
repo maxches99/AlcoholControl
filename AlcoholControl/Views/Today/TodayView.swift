@@ -111,6 +111,7 @@ struct TodayView: View {
     @Query(sort: [SortDescriptor<DrinkEntry>(\.createdAt, order: .reverse)]) private var allDrinks: [DrinkEntry]
     @Query private var profiles: [UserProfile]
     @Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)]) private var healthSnapshots: [HealthDailySnapshot]
+    @Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)]) private var riskModelRuns: [RiskModelRun]
 
     @State private var activeSheet: TodaySheet?
     @State private var showEmergencyConfirm = false
@@ -135,6 +136,8 @@ struct TodayView: View {
     @AppStorage("trustedContactPhone") private var trustedContactPhone = ""
     @AppStorage("riskModelVariant") private var riskModelVariant = "A"
     @AppStorage("shadowRiskModeEnabled") private var shadowRiskModeEnabled = true
+    @AppStorage("shadowRolloutMinHistory") private var shadowRolloutMinHistory = 5
+    @AppStorage("shadowRolloutMinConfidence") private var shadowRolloutMinConfidence = 55
 
     private let sessionService = SessionService()
     private let calculator = BACCalculator()
@@ -155,6 +158,7 @@ struct TodayView: View {
         _allDrinks = Query(sort: [SortDescriptor<DrinkEntry>(\.createdAt, order: .reverse)])
         _profiles = Query()
         _healthSnapshots = Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)])
+        _riskModelRuns = Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)])
     }
 
     private var activeSession: Session? {
@@ -347,6 +351,7 @@ struct TodayView: View {
             .onAppear {
                 presentPendingRouteIfNeeded()
                 applyPendingWatchActionsIfNeeded()
+                updateModelQualityMetricsIfPossible()
             }
             .onChange(of: appState.pendingMorningCheckInSessionID) { _, _ in
                 presentPendingRouteIfNeeded()
@@ -376,6 +381,9 @@ struct TodayView: View {
                 if isPresented {
                     activeTermHint = nil
                 }
+            }
+            .onChange(of: sessions.count) { _, _ in
+                updateModelQualityMetricsIfPossible()
             }
         }
     }
@@ -410,6 +418,10 @@ struct TodayView: View {
                 baseline: insights
             )
             : nil
+        let completedHistoryCount = sessions.filter { !$0.isActive && $0.id != session.id }.count
+        let shouldShowShadowBlock = (shadowAssessment?.status == .ready) &&
+            completedHistoryCount >= shadowRolloutMinHistory &&
+            (shadowAssessment?.confidencePercent ?? 0) >= shadowRolloutMinConfidence
         let standardDrinks = standardDrinksInSession(session)
         let consumedWaterMl = session.waters.compactMap(\.volumeMl).reduce(0, +)
         let limitState = sessionLimitState(standardDrinks: standardDrinks)
@@ -447,7 +459,7 @@ struct TodayView: View {
 
                 EveningInsightsCard(
                     insights: insights,
-                    shadowAssessment: shadowAssessment,
+                    shadowAssessment: shouldShowShadowBlock ? shadowAssessment : nil,
                     recoveryIndex: recoveryIndex,
                     patterns: patterns,
                     scenarios: scenarios,
@@ -576,6 +588,7 @@ struct TodayView: View {
                     memoryProbability: shadowAssessment.memoryProbabilityPercent ?? 0
                 )
             }
+            updateModelQualityMetricsIfPossible()
         }
     }
 
@@ -1396,6 +1409,44 @@ struct TodayView: View {
             context.insert(run)
         }
         try? context.save()
+    }
+
+    private func updateModelQualityMetricsIfPossible() {
+        let calendar = Calendar.current
+        var changed = false
+
+        for session in sessions where session.morningCheckIn != nil {
+            let wellbeing = max(0, min(5, session.morningCheckIn?.wellbeingScore ?? 5))
+            let observed = insightService.observedMorningProbability(for: wellbeing)
+            let day = calendar.startOfDay(for: session.startAt)
+            let dayRuns = riskModelRuns.filter { run in
+                run.day == day && (run.variant == "coreml-shadow-v1" || run.variant == riskModelVariant)
+            }
+
+            for run in dayRuns {
+                let error = abs(run.morningProbability - observed)
+                let predicted = Double(run.morningProbability) / 100
+                let observedNormalized = Double(observed) / 100
+                let brier = (predicted - observedNormalized) * (predicted - observedNormalized)
+
+                if run.observedWellbeingScore != wellbeing ||
+                    run.observedMorningProbability != observed ||
+                    run.absoluteErrorPercent != error ||
+                    run.brierScore != brier
+                {
+                    run.observedWellbeingScore = wellbeing
+                    run.observedMorningProbability = observed
+                    run.absoluteErrorPercent = error
+                    run.brierScore = brier
+                    run.updatedAt = .now
+                    changed = true
+                }
+            }
+        }
+
+        if changed {
+            try? context.save()
+        }
     }
 
     private func deriveHealthFromSnapshots(for day: Date) {

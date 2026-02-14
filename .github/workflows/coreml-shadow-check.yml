@@ -1,0 +1,21 @@
+name: CoreML Shadow Models Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-shadow-models:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Regenerate CoreML shadow models
+        run: ./Scripts/generate_shadow_models.sh
+
+      - name: Ensure models are up to date
+        run: git diff --exit-code -- AlcoholControl/ML/ShadowMorningRegressor.mlmodel AlcoholControl/ML/ShadowMemoryRegressor.mlmodel

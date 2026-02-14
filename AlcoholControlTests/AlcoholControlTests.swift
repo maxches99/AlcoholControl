@@ -10,6 +10,22 @@ import SwiftData
 import Testing
 @testable import AlcoholControl
 
+private struct StubShadowPredictor: ShadowRiskPredicting {
+    let morning: Double?
+    let memory: Double?
+
+    func delta(outputName: String, features: [String : Double]) -> Double? {
+        switch outputName {
+        case "morningDelta":
+            return morning
+        case "memoryDelta":
+            return memory
+        default:
+            return nil
+        }
+    }
+}
+
 struct AlcoholControlTests {
 
     @Test @MainActor func openTodayResetsPendingRoutes() async throws {
@@ -183,6 +199,109 @@ struct AlcoholControlTests {
         }
         #expect(shadow.morningProbabilityPercent == nil)
         #expect(shadow.memoryProbabilityPercent == nil)
+    }
+
+    @Test func shadowAssessmentUsesInjectedPredictorWhenAvailable() {
+        let now = Date.now
+        let current = Session(
+            startAt: now.addingTimeInterval(-3 * 3600),
+            endAt: now.addingTimeInterval(-20 * 60),
+            isActive: true,
+            cachedPeakBAC: 0.14,
+            cachedEstimatedSoberAt: now.addingTimeInterval(2 * 3600)
+        )
+        current.meals = [MealEntry(title: "Meal", size: .regular, session: current)]
+        current.waters = [WaterEntry(volumeMl: 250, session: current)]
+
+        var history: [Session] = []
+        for day in 1...6 {
+            let start = now.addingTimeInterval(-Double(day) * 24 * 3600)
+            let session = Session(
+                startAt: start,
+                endAt: start.addingTimeInterval(2 * 3600),
+                isActive: false,
+                cachedPeakBAC: 0.11,
+                cachedEstimatedSoberAt: start.addingTimeInterval(3 * 3600)
+            )
+            session.waters = [WaterEntry(volumeMl: 300, session: session)]
+            history.append(session)
+        }
+
+        let baseService = SessionInsightService()
+        let baseline = baseService.assess(session: current, profile: nil, at: now, history: history)
+        let service = SessionInsightService(shadowPredictor: StubShadowPredictor(morning: 0.90, memory: 0.80))
+
+        let shadow = service.assessShadow(
+            session: current,
+            profile: nil,
+            at: now,
+            health: nil,
+            history: history,
+            baseline: baseline
+        )
+
+        switch shadow.status {
+        case .ready:
+            #expect(true)
+        case .insufficientData:
+            #expect(Bool(false), "Expected ready status with enough history")
+        }
+        #expect(shadow.note == L10n.tr("CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета."))
+
+        let expectedMorning = min(99, max(0, Int((Double(baseline.morningProbabilityPercent) * 0.65 + 0.90 * 35).rounded())))
+        let expectedMemory = min(99, max(0, Int((Double(baseline.memoryProbabilityPercent) * 0.65 + 0.80 * 35).rounded())))
+        #expect(shadow.morningProbabilityPercent == expectedMorning)
+        #expect(shadow.memoryProbabilityPercent == expectedMemory)
+    }
+
+    @Test func shadowAssessmentFallsBackWhenPredictorUnavailable() {
+        let now = Date.now
+        let current = Session(
+            startAt: now.addingTimeInterval(-4 * 3600),
+            endAt: now.addingTimeInterval(-30 * 60),
+            isActive: true,
+            cachedPeakBAC: 0.16,
+            cachedEstimatedSoberAt: now.addingTimeInterval(3 * 3600)
+        )
+        current.waters = [WaterEntry(volumeMl: 200, session: current)]
+
+        var history: [Session] = []
+        for day in 1...6 {
+            let start = now.addingTimeInterval(-Double(day) * 24 * 3600)
+            let session = Session(
+                startAt: start,
+                endAt: start.addingTimeInterval(150 * 60),
+                isActive: false,
+                cachedPeakBAC: 0.12,
+                cachedEstimatedSoberAt: start.addingTimeInterval(4 * 3600)
+            )
+            history.append(session)
+        }
+
+        let baseline = SessionInsightService().assess(session: current, profile: nil, at: now, history: history)
+        let unavailable = SessionInsightService(shadowPredictor: StubShadowPredictor(morning: nil, memory: nil))
+        let available = SessionInsightService(shadowPredictor: StubShadowPredictor(morning: 0.98, memory: 0.97))
+
+        let fallbackShadow = unavailable.assessShadow(
+            session: current,
+            profile: nil,
+            at: now,
+            health: nil,
+            history: history,
+            baseline: baseline
+        )
+        let modelShadow = available.assessShadow(
+            session: current,
+            profile: nil,
+            at: now,
+            health: nil,
+            history: history,
+            baseline: baseline
+        )
+
+        #expect(fallbackShadow.note == L10n.tr("Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета."))
+        #expect(modelShadow.note == L10n.tr("CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета."))
+        #expect(fallbackShadow.morningProbabilityPercent != modelShadow.morningProbabilityPercent)
     }
 
 }
