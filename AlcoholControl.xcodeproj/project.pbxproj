@@ -550,6 +550,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = AlcoSafe;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Alcohol Control reads sleep, steps, and resting heart rate to personalize recovery insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Alcohol Control writes hydration entries so your logged water stays synced with Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -589,6 +590,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = AlcoSafe;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Alcohol Control reads sleep, steps, and resting heart rate to personalize recovery insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Alcohol Control writes hydration entries so your logged water stays synced with Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -154,4 +154,35 @@ struct AlcoholControlTests {
         #expect(learned.morningReasons.contains(L10n.tr("Индивидуальный ориентир риска, рассчитанный по вашим предыдущим сессиям.")))
     }
 
+    @Test func shadowAssessmentRequiresEnoughHistory() {
+        let service = SessionInsightService()
+        let now = Date.now
+        let session = Session(
+            startAt: now.addingTimeInterval(-2 * 3600),
+            endAt: now.addingTimeInterval(-30 * 60),
+            isActive: true,
+            cachedPeakBAC: 0.10,
+            cachedEstimatedSoberAt: now.addingTimeInterval(2 * 3600)
+        )
+        let baseline = service.assess(session: session, profile: nil, at: now, history: [])
+
+        let shadow = service.assessShadow(
+            session: session,
+            profile: nil,
+            at: now,
+            health: nil,
+            history: [],
+            baseline: baseline
+        )
+
+        switch shadow.status {
+        case .insufficientData:
+            #expect(true)
+        case .ready:
+            #expect(Bool(false), "Shadow assessment should require more history")
+        }
+        #expect(shadow.morningProbabilityPercent == nil)
+        #expect(shadow.memoryProbabilityPercent == nil)
+    }
+
 }

@@ -40,7 +40,7 @@ final class HealthKitService {
     private init() {}
 
     var isAvailable: Bool {
-        HKHealthStore.isHealthDataAvailable() && sleepType != nil
+        HKHealthStore.isHealthDataAvailable()
     }
 
     func requestSleepAuthorization() async -> Bool {
@@ -209,6 +209,7 @@ final class HealthKitService {
 
     func saveWaterIntake(volumeMl: Double, at date: Date = .now, syncIdentifier: String? = nil) async -> Bool {
         guard isAvailable, let dietaryWaterType, volumeMl > 0 else { return false }
+        guard await ensureWaterWriteAuthorization(for: dietaryWaterType) else { return false }
 
         var metadata: [String: Any] = [waterSourceMetadataKey: waterSourceMetadataValue]
         if let syncIdentifier {
@@ -292,6 +293,24 @@ final class HealthKitService {
                 continuation.resume(returning: mapped)
             }
             store.execute(query)
+        }
+    }
+
+    private func ensureWaterWriteAuthorization(for type: HKQuantityType) async -> Bool {
+        switch store.authorizationStatus(for: type) {
+        case .sharingAuthorized:
+            return true
+        case .notDetermined:
+            do {
+                try await store.requestAuthorization(toShare: [type], read: [type])
+            } catch {
+                return false
+            }
+            return store.authorizationStatus(for: type) == .sharingAuthorized
+        case .sharingDenied:
+            return false
+        @unknown default:
+            return false
         }
     }
 

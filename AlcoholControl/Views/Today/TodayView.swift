@@ -134,6 +134,7 @@ struct TodayView: View {
     @AppStorage("safetyModeEnabled") private var safetyModeEnabled = false
     @AppStorage("trustedContactPhone") private var trustedContactPhone = ""
     @AppStorage("riskModelVariant") private var riskModelVariant = "A"
+    @AppStorage("shadowRiskModeEnabled") private var shadowRiskModeEnabled = true
 
     private let sessionService = SessionService()
     private let calculator = BACCalculator()
@@ -400,6 +401,15 @@ struct TodayView: View {
         let patterns = insightService.personalizedPatterns(current: session, history: sessions, profile: profile)
         let scenarios = insightService.eveningScenarios(for: session, profile: profile, history: sessions)
         let projections = insightService.memoryProjections(for: session, profile: profile, history: sessions)
+        let shadowAssessment = shadowRiskModeEnabled
+            ? insightService.assessShadow(
+                session: session,
+                profile: profile,
+                health: healthContext,
+                history: sessions,
+                baseline: insights
+            )
+            : nil
         let standardDrinks = standardDrinksInSession(session)
         let consumedWaterMl = session.waters.compactMap(\.volumeMl).reduce(0, +)
         let limitState = sessionLimitState(standardDrinks: standardDrinks)
@@ -437,6 +447,7 @@ struct TodayView: View {
 
                 EveningInsightsCard(
                     insights: insights,
+                    shadowAssessment: shadowAssessment,
                     recoveryIndex: recoveryIndex,
                     patterns: patterns,
                     scenarios: scenarios,
@@ -551,7 +562,20 @@ struct TodayView: View {
                 recoveryLevel: recoveryIndex.level
             )
             await syncSmartReminder(sessionID: session.id, insights: insights)
-            recordRiskModelRun(assessment: insights)
+            recordRiskModelRun(
+                variant: riskModelVariant,
+                confidencePercent: insights.confidence.scorePercent,
+                morningProbability: insights.morningProbabilityPercent,
+                memoryProbability: insights.memoryProbabilityPercent
+            )
+            if let shadowAssessment, shadowAssessment.status == .ready {
+                recordRiskModelRun(
+                    variant: "coreml-shadow-v1",
+                    confidencePercent: shadowAssessment.confidencePercent,
+                    morningProbability: shadowAssessment.morningProbabilityPercent ?? 0,
+                    memoryProbability: shadowAssessment.memoryProbabilityPercent ?? 0
+                )
+            }
         }
     }
 
@@ -1343,26 +1367,31 @@ struct TodayView: View {
         }
     }
 
-    private func recordRiskModelRun(assessment: EveningInsightAssessment) {
+    private func recordRiskModelRun(
+        variant: String,
+        confidencePercent: Int,
+        morningProbability: Int,
+        memoryProbability: Int
+    ) {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: .now)
         let predicate = #Predicate<RiskModelRun> { run in
-            run.day == day && run.variant == riskModelVariant
+            run.day == day && run.variant == variant
         }
         var descriptor = FetchDescriptor<RiskModelRun>(predicate: predicate)
         descriptor.fetchLimit = 1
         if let existing = try? context.fetch(descriptor).first {
-            existing.confidencePercent = assessment.confidence.scorePercent
-            existing.morningProbability = assessment.morningProbabilityPercent
-            existing.memoryProbability = assessment.memoryProbabilityPercent
+            existing.confidencePercent = confidencePercent
+            existing.morningProbability = morningProbability
+            existing.memoryProbability = memoryProbability
             existing.updatedAt = Date.now
         } else {
             let run = RiskModelRun(
                 day: day,
-                variant: riskModelVariant,
-                confidencePercent: assessment.confidence.scorePercent,
-                morningProbability: assessment.morningProbabilityPercent,
-                memoryProbability: assessment.memoryProbabilityPercent
+                variant: variant,
+                confidencePercent: confidencePercent,
+                morningProbability: morningProbability,
+                memoryProbability: memoryProbability
             )
             context.insert(run)
         }
@@ -1563,6 +1592,7 @@ private struct TimelineSection: View {
 
 private struct EveningInsightsCard: View {
     let insights: EveningInsightAssessment
+    let shadowAssessment: ShadowRiskAssessment?
     let recoveryIndex: RecoveryIndexSnapshot
     let patterns: PersonalizedPatternAssessment
     let scenarios: [EveningScenario]
@@ -1599,6 +1629,45 @@ private struct EveningInsightsCard: View {
                 percent: insights.memoryProbabilityPercent,
                 reason: insights.memoryReasons.first ?? "Данных пока мало"
             )
+
+            if let shadowAssessment {
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.tr("Shadow-прогноз (на основе ваших данных)"))
+                        .font(.subheadline.weight(.semibold))
+                    switch shadowAssessment.status {
+                    case .ready:
+                        HStack {
+                            Text(L10n.tr("Насколько тяжело утром"))
+                            Spacer()
+                            Text("~\(shadowAssessment.morningProbabilityPercent ?? 0)%")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        HStack {
+                            Text(L10n.tr("Риск провалов памяти"))
+                            Spacer()
+                            Text("~\(shadowAssessment.memoryProbabilityPercent ?? 0)%")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        HStack {
+                            Text(L10n.tr("Уверенность shadow-модели"))
+                            Spacer()
+                            Text("~\(shadowAssessment.confidencePercent)%")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    case .insufficientData:
+                        Text(L10n.tr("Персональных данных пока недостаточно для shadow-прогноза."))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(shadowAssessment.note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {

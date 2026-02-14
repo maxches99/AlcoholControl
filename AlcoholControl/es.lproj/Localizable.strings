@@ -697,3 +697,9 @@
 "One-tap лог" = "Registro de un toque";
 "Без открытия формы" = "Sin abrir formulario";
 "Premium аналитика" = "Analitica Premium";
+"Shadow-прогноз (на основе ваших данных)" = "Pronostico shadow (basado en tus datos)";
+"Уверенность shadow-модели" = "Confianza del modelo shadow";
+"Персональных данных пока недостаточно для shadow-прогноза." = "Todavia no hay suficientes datos personales para un pronostico shadow.";
+"Недостаточно данных: добавьте еще несколько завершенных сессий, и появится персональный shadow-прогноз." = "Aun no hay suficientes datos: agrega algunas sesiones completadas mas y aparecera tu pronostico shadow personal.";
+"Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета." = "Pronostico en modo shadow: basado en tus datos y separado del calculo principal.";
+"CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета." = "Pronostico shadow con CoreML: basado en tus datos y separado del calculo principal.";

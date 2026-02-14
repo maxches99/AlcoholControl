@@ -1,4 +1,5 @@
 import Foundation
+import CoreML
 
 enum InsightLevel: String {
     case low
@@ -68,6 +69,19 @@ struct EveningInsightAssessment {
     let mealImpact: String
     let waterBalance: WaterBalanceSnapshot
     let actionsNow: [String]
+}
+
+enum ShadowRiskStatus {
+    case ready
+    case insufficientData
+}
+
+struct ShadowRiskAssessment {
+    let status: ShadowRiskStatus
+    let morningProbabilityPercent: Int?
+    let memoryProbabilityPercent: Int?
+    let confidencePercent: Int
+    let note: String
 }
 
 struct SessionHealthContext {
@@ -169,6 +183,8 @@ private struct LearningFeatures {
 
 struct SessionInsightService {
     private let calculator = BACCalculator()
+    private static let shadowMorningModel = loadCompiledModel(named: "ShadowMorningRegressor")
+    private static let shadowMemoryModel = loadCompiledModel(named: "ShadowMemoryRegressor")
 
     func assess(
         session: Session,
@@ -542,6 +558,109 @@ struct SessionInsightService {
             level: level,
             headline: headline,
             reasons: Array(reasons.prefix(3))
+        )
+    }
+
+    func assessShadow(
+        session: Session,
+        profile: UserProfile? = nil,
+        at date: Date = .now,
+        health: SessionHealthContext? = nil,
+        history: [Session]? = nil,
+        baseline: EveningInsightAssessment? = nil
+    ) -> ShadowRiskAssessment {
+        let completedHistory = (history ?? [])
+            .filter { !$0.isActive && $0.id != session.id }
+            .sorted(by: { $0.startAt > $1.startAt })
+        let trainingWindow = Array(completedHistory.prefix(12))
+
+        guard trainingWindow.count >= 5 else {
+            return ShadowRiskAssessment(
+                status: .insufficientData,
+                morningProbabilityPercent: nil,
+                memoryProbabilityPercent: nil,
+                confidencePercent: 20,
+                note: L10n.tr("Недостаточно данных: добавьте еще несколько завершенных сессий, и появится персональный shadow-прогноз.")
+            )
+        }
+
+        let baselineAssessment = baseline ?? assess(
+            session: session,
+            profile: profile,
+            at: date,
+            health: health,
+            history: history
+        )
+        let durationHours = max(0.5, (session.endAt ?? date).timeIntervalSince(session.startAt) / 3600)
+        let totalStandardDrinks = session.drinks.reduce(0.0) { partial, drink in
+            partial + standardDrinks(from: drink)
+        }
+        let pace = totalStandardDrinks / durationHours
+        let waterProgress = hydrationProgress(for: session, profile: profile)
+        let patterns = personalizedPatterns(current: session, history: completedHistory, profile: profile)
+
+        let peakRatio = session.cachedPeakBAC / max(0.01, patterns.peakRiskThreshold)
+        let paceRatio = pace / max(0.2, patterns.paceRiskThreshold)
+        let hydrationDeficit = clamp(1 - waterProgress, min: 0, max: 1)
+        let shortSleepFlag = (health?.sleepHours ?? 7) < 6 ? 1.0 : 0.0
+        let noMealFlag = session.meals.isEmpty ? 1.0 : 0.0
+
+        let modelFeatures: [String: Double] = [
+            "peakRatio": peakRatio,
+            "paceRatio": paceRatio,
+            "hydrationDeficit": hydrationDeficit,
+            "shortSleep": shortSleepFlag,
+            "noMeal": noMealFlag
+        ]
+
+        let coreMLMorningDelta = coreMLDelta(
+            model: Self.shadowMorningModel,
+            outputName: "morningDelta",
+            features: modelFeatures
+        )
+        let coreMLMemoryDelta = coreMLDelta(
+            model: Self.shadowMemoryModel,
+            outputName: "memoryDelta",
+            features: modelFeatures
+        )
+
+        let morningDelta = coreMLMorningDelta ?? sigmoid(
+            -1.35 +
+            (0.95 * peakRatio) +
+            (0.55 * paceRatio) +
+            (0.85 * hydrationDeficit) +
+            (0.35 * shortSleepFlag) +
+            (0.25 * noMealFlag)
+        )
+        let memoryDelta = coreMLMemoryDelta ?? sigmoid(
+            -1.70 +
+            (1.10 * peakRatio) +
+            (0.80 * paceRatio) +
+            (0.45 * hydrationDeficit) +
+            (0.20 * noMealFlag)
+        )
+
+        let shadowMorning = cappedPercent(
+            Int((Double(baselineAssessment.morningProbabilityPercent) * 0.65 + morningDelta * 35).rounded())
+        )
+        let shadowMemory = cappedPercent(
+            Int((Double(baselineAssessment.memoryProbabilityPercent) * 0.65 + memoryDelta * 35).rounded())
+        )
+        let confidenceBoost = min(40, trainingWindow.count * 3)
+        let modelLoaded = coreMLMorningDelta != nil && coreMLMemoryDelta != nil
+        let confidence = min(
+            95,
+            max(35, baselineAssessment.confidence.scorePercent + confidenceBoost - (modelLoaded ? 2 : 8))
+        )
+
+        return ShadowRiskAssessment(
+            status: .ready,
+            morningProbabilityPercent: shadowMorning,
+            memoryProbabilityPercent: shadowMemory,
+            confidencePercent: confidence,
+            note: modelLoaded
+                ? L10n.tr("CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета.")
+                : L10n.tr("Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета.")
         )
     }
 
@@ -1434,6 +1553,46 @@ struct SessionInsightService {
         Swift.max(minValue, Swift.min(maxValue, value))
     }
 
+    private func sigmoid(_ x: Double) -> Double {
+        1 / (1 + exp(-x))
+    }
+
+    private func coreMLDelta(
+        model: MLModel?,
+        outputName: String,
+        features: [String: Double]
+    ) -> Double? {
+        guard let model else { return nil }
+        let payload = features.reduce(into: [String: Any]()) { partial, item in
+            partial[item.key] = item.value
+        }
+        guard let provider = try? MLDictionaryFeatureProvider(dictionary: payload),
+              let result = try? model.prediction(from: provider)
+        else {
+            return nil
+        }
+        if let direct = result.featureValue(for: outputName)?.doubleValue {
+            return clamp(direct, min: 0, max: 1)
+        }
+        for outputKey in model.modelDescription.outputDescriptionsByName.keys {
+            if let value = result.featureValue(for: outputKey)?.doubleValue {
+                return clamp(value, min: 0, max: 1)
+            }
+        }
+        return nil
+    }
+
+    private static func loadCompiledModel(named name: String) -> MLModel? {
+        let bundles: [Bundle] = [.main, Bundle(for: ShadowModelBundleMarker.self)]
+        for bundle in bundles {
+            if let url = bundle.url(forResource: name, withExtension: "mlmodelc"),
+               let model = try? MLModel(contentsOf: url) {
+                return model
+            }
+        }
+        return nil
+    }
+
     private func weightInKg(_ profile: UserProfile?) -> Double {
         guard let profile else { return 70 }
         switch profile.unitSystem {
@@ -1444,6 +1603,8 @@ struct SessionInsightService {
         }
     }
 }
+
+private final class ShadowModelBundleMarker {}
 
 private struct MealMitigation {
     let scoreReduction: Int

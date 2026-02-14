@@ -765,3 +765,9 @@
 "Тяжелые утра: %d / лимит %d" = "Heavy mornings: %d / limit %d";
 "Умные напоминания" = "Smart reminders";
 "Цель: >= %d%% водного баланса" = "Target: >= %d%% water balance";
+"Shadow-прогноз (на основе ваших данных)" = "Shadow forecast (based on your data)";
+"Уверенность shadow-модели" = "Shadow model confidence";
+"Персональных данных пока недостаточно для shadow-прогноза." = "There is not enough personal data yet for a shadow forecast.";
+"Недостаточно данных: добавьте еще несколько завершенных сессий, и появится персональный shadow-прогноз." = "Not enough data yet: add a few more completed sessions and your personal shadow forecast will appear.";
+"Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета." = "Shadow-mode forecast: based on your data and shown separately from the main estimate.";
+"CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета." = "CoreML shadow forecast: based on your data and shown separately from the main estimate.";
