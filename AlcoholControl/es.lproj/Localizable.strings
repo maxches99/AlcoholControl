@@ -745,3 +745,7 @@
 "В ваших данных это встречается чаще: %d%% против обычных %d%%. Оценка уточнена CoreML." = "En tus datos aparece más a menudo: %d%% frente al %d%% habitual. Estimación refinada con CoreML.";
 "Это наблюдательные паттерны по вашим данным, уточненные CoreML, а не причинно-следственный вывод." = "Son patrones observacionales basados en tus datos, refinados con CoreML, no conclusiones causales.";
 "Использовать CoreML для паттернов" = "Usar CoreML para patrones";
+"Debug меню" = "Menú debug";
+"Принудительно включить Premium" = "Forzar Premium";
+"Используйте только для локальной отладки. Оформление подписки не выполняется." = "Úsalo solo para depuración local. Esto no compra una suscripción.";
+"Debug меню разблокировано" = "Menú debug desbloqueado";

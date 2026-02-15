@@ -12,10 +12,13 @@ struct AnalyticsView: View {
     @State private var showingPaywall = false
     @State private var showingHabits = false
     @State private var weeklySummaryCopied = false
+    @State private var generatedWeeklySummaryText: String?
+    @State private var weeklySummaryLoading = false
     @AppStorage("weeklyHeavyMorningLimit") private var weeklyHeavyMorningLimit = 2
     @AppStorage("weeklyHighMemoryRiskLimit") private var weeklyHighMemoryRiskLimit = 2
     @AppStorage("weeklyHydrationHitTarget") private var weeklyHydrationHitTarget = 70
     private let insightService = SessionInsightService()
+    private let weeklySummaryNarrativeService = WeeklySummaryNarrativeService()
 
     init() {
         _sessions = Query(sort: [SortDescriptor<Session>(\.startAt, order: .reverse)])
@@ -213,15 +216,38 @@ struct AnalyticsView: View {
         return L10n.tr("Фокус недели: удерживать текущий режим. По вашим данным тренд выглядит стабильным.")
     }
 
-    private var weeklySummaryText: String {
-        L10n.format(
-            "Weekly summary: heavy mornings %d, high memory-risk %d, hydration %d%%, process quality %d/100, recovery load %d/100.",
-            weeklySnapshot.heavyMorningCount,
-            weeklySnapshot.highMemoryRiskCount,
-            weeklySnapshot.hydrationHitRatePercent,
-            processQualityScore,
-            recoveryLoadScore
+    private var weeklySummaryInput: WeeklySummaryNarrativeInput {
+        WeeklySummaryNarrativeInput(
+            heavyMorningCount: weeklySnapshot.heavyMorningCount,
+            highMemoryRiskCount: weeklySnapshot.highMemoryRiskCount,
+            hydrationHitRatePercent: weeklySnapshot.hydrationHitRatePercent,
+            processQualityScore: processQualityScore,
+            recoveryLoadScore: recoveryLoadScore,
+            weeklyFocusText: weeklyFocusText
         )
+    }
+
+    private var weeklySummaryFallbackText: String {
+        weeklySummaryNarrativeService.fallbackSummary(for: weeklySummaryInput)
+    }
+
+    private var weeklySummaryText: String {
+        generatedWeeklySummaryText ?? weeklySummaryFallbackText
+    }
+
+    private var usesAISummaryText: Bool {
+        generatedWeeklySummaryText != nil
+    }
+
+    private var weeklySummarySignature: String {
+        [
+            "\(weeklySummaryInput.heavyMorningCount)",
+            "\(weeklySummaryInput.highMemoryRiskCount)",
+            "\(weeklySummaryInput.hydrationHitRatePercent)",
+            "\(weeklySummaryInput.processQualityScore)",
+            "\(weeklySummaryInput.recoveryLoadScore)",
+            weeklySummaryInput.weeklyFocusText
+        ].joined(separator: "|")
     }
 
     private var heavyMorningStatus: (ok: Bool, text: String) {
@@ -301,6 +327,9 @@ struct AnalyticsView: View {
             }
             .onChange(of: sessions.count) { _, _ in
                 loadCachedRecoverySteps()
+            }
+            .task(id: weeklySummarySignature) {
+                await refreshWeeklySummaryText()
             }
         }
     }
@@ -536,8 +565,23 @@ struct AnalyticsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Shareable weekly summary"))
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    Text(L10n.tr("Shareable weekly summary"))
+                        .font(.headline)
+                    if usesAISummaryText {
+                        Text(L10n.tr("AI"))
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.blue.opacity(0.14))
+                            .clipShape(Capsule())
+                    }
+                }
+                if weeklySummaryLoading {
+                    Text(L10n.tr("Формируем персональное пояснение..."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Text(weeklySummaryText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -808,6 +852,21 @@ struct AnalyticsView: View {
 
         syncedRecoverySteps = map
         stepSyncStatus = L10n.format("Обновлено шагов для %d сессий.", updated)
+    }
+
+    @MainActor
+    private func refreshWeeklySummaryText() async {
+        generatedWeeklySummaryText = nil
+        guard weeklySummaryNarrativeService.supportsFoundationModels() else {
+            weeklySummaryLoading = false
+            return
+        }
+
+        weeklySummaryLoading = true
+        defer { weeklySummaryLoading = false }
+        let summary = await weeklySummaryNarrativeService.makeSummary(for: weeklySummaryInput)
+        guard !Task.isCancelled else { return }
+        generatedWeeklySummaryText = summary == weeklySummaryFallbackText ? nil : summary
     }
 }
 

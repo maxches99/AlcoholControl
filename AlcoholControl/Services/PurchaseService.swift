@@ -5,16 +5,19 @@ import StoreKit
 @MainActor
 final class PurchaseService: ObservableObject {
     static let shared = PurchaseService()
+    private static let debugPremiumOverrideKey = "debugPremiumOverrideEnabled"
     private let monthlyID = "com.alcoholcontrol.premium.monthly"
     private let yearlyID = "com.alcoholcontrol.premium.yearly"
     @Published var isPremium = false
     @Published var products: [Product] = []
     @Published var isLoadingProducts = false
     @Published var selectedProductID = "com.alcoholcontrol.premium.monthly"
+    @Published var debugPremiumOverrideEnabled = false
 
     private var transactionUpdatesTask: Task<Void, Never>?
 
     private init() {
+        debugPremiumOverrideEnabled = UserDefaults.standard.bool(forKey: Self.debugPremiumOverrideKey)
         observeTransactionUpdates()
     }
 
@@ -93,6 +96,16 @@ final class PurchaseService: ObservableObject {
         return isPremium
     }
 
+    func setDebugPremiumOverride(_ isEnabled: Bool) {
+        debugPremiumOverrideEnabled = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: Self.debugPremiumOverrideKey)
+        if isEnabled {
+            isPremium = true
+        } else {
+            Task { await refreshPremiumStatus() }
+        }
+    }
+
     private func order(for productID: String) -> Int {
         switch productID {
         case monthlyID:
@@ -129,6 +142,6 @@ final class PurchaseService: ObservableObject {
             hasPremium = true
             break
         }
-        isPremium = hasPremium
+        isPremium = hasPremium || debugPremiumOverrideEnabled
     }
 }

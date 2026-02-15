@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var connectingHealth = false
     @State private var csvExportURL: URL?
     @State private var jsonExportURL: URL?
+    @AppStorage("debugMenuUnlocked") private var debugMenuUnlocked = false
     @AppStorage("selectedAppLanguage") private var selectedAppLanguage = AppLanguage.system.rawValue
     @AppStorage("goalStdDrinks") private var goalStdDrinks = 4.0
     @AppStorage("goalWaterMl") private var goalWaterMl = 1200.0
@@ -396,6 +397,21 @@ struct SettingsView: View {
                     Toggle(L10n.tr("Скрывать BAC в шаринге"), isOn: $hideBACInSharing)
                 }
 
+                if debugMenuUnlocked {
+                    Section(L10n.tr("Debug меню")) {
+                        Toggle(
+                            L10n.tr("Принудительно включить Premium"),
+                            isOn: Binding(
+                                get: { purchase.debugPremiumOverrideEnabled },
+                                set: { purchase.setDebugPremiumOverride($0) }
+                            )
+                        )
+                        Text(L10n.tr("Используйте только для локальной отладки. Оформление подписки не выполняется."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(L10n.tr("Подписка")) {
                     Text(purchase.isPremium ? L10n.tr("Статус: Premium активен") : L10n.tr("Статус: базовый"))
                         .foregroundStyle(.secondary)
@@ -438,6 +454,16 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle(L10n.tr("Настройки"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(L10n.tr("Настройки"))
+                        .onTapGesture(count: 5) {
+                            debugMenuUnlocked = true
+                            statusMessage = L10n.tr("Debug меню разблокировано")
+                        }
+                }
+            }
             .task {
                 await loadInitialStateIfNeeded()
                 await purchase.restore()
