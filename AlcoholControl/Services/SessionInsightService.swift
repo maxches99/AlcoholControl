@@ -138,6 +138,30 @@ struct TriggerPatternsSummary {
     let hits: [TriggerPatternHit]
 }
 
+enum PersonalTrendsStatus {
+    case ready
+    case insufficientData
+}
+
+struct PersonalTrendFinding: Identifiable {
+    let id: String
+    let trigger: String
+    let outcome: String
+    let supportSessions: Int
+    let sampleSessions: Int
+    let triggerRatePercent: Int
+    let baseRatePercent: Int
+    let liftPercent: Int
+    let confidencePercent: Int
+    let note: String
+}
+
+struct PersonalTrendsSummary {
+    let status: PersonalTrendsStatus
+    let findings: [PersonalTrendFinding]
+    let note: String
+}
+
 struct PersonalizedPatternAssessment {
     let peakRiskThreshold: Double
     let memoryRiskThreshold: Double
@@ -169,6 +193,10 @@ struct MemoryProjection: Identifiable {
 
 protocol ShadowRiskPredicting {
     func delta(outputName: String, features: [String: Double]) -> Double?
+}
+
+protocol PersonalTrendPredicting {
+    func probability(outputName: String, features: [String: Double]) -> Double?
 }
 
 private struct CoreMLShadowPredictor: ShadowRiskPredicting {
@@ -214,6 +242,55 @@ private struct CoreMLShadowPredictor: ShadowRiskPredicting {
     }
 }
 
+private struct CoreMLPersonalTrendPredictor: PersonalTrendPredicting {
+    private let headacheModel: MLModel?
+    private let fatigueModel: MLModel?
+    private let heavyMorningModel: MLModel?
+
+    init(
+        headacheModel: MLModel? = loadCompiledModel(named: "ShadowTrendHeadacheRegressor"),
+        fatigueModel: MLModel? = loadCompiledModel(named: "ShadowTrendFatigueRegressor"),
+        heavyMorningModel: MLModel? = loadCompiledModel(named: "ShadowTrendHeavyMorningRegressor")
+    ) {
+        self.headacheModel = headacheModel
+        self.fatigueModel = fatigueModel
+        self.heavyMorningModel = heavyMorningModel
+    }
+
+    func probability(outputName: String, features: [String: Double]) -> Double? {
+        let model: MLModel?
+        if outputName == "headacheProbability" {
+            model = headacheModel
+        } else if outputName == "fatigueProbability" {
+            model = fatigueModel
+        } else if outputName == "heavyMorningProbability" {
+            model = heavyMorningModel
+        } else {
+            model = nil
+        }
+        guard let model else { return nil }
+
+        let payload = features.reduce(into: [String: Any]()) { partial, item in
+            partial[item.key] = item.value
+        }
+        guard let provider = try? MLDictionaryFeatureProvider(dictionary: payload),
+              let result = try? model.prediction(from: provider)
+        else {
+            return nil
+        }
+
+        if let direct = result.featureValue(for: outputName)?.doubleValue {
+            return clamp(direct, min: 0, max: 1)
+        }
+        for outputKey in model.modelDescription.outputDescriptionsByName.keys {
+            if let value = result.featureValue(for: outputKey)?.doubleValue {
+                return clamp(value, min: 0, max: 1)
+            }
+        }
+        return nil
+    }
+}
+
 private struct PersonalLearningSnapshot {
     let scoreDelta: Int
     let probabilityBias: Int
@@ -231,9 +308,14 @@ private struct LearningFeatures {
 struct SessionInsightService {
     private let calculator = BACCalculator()
     private let shadowPredictor: any ShadowRiskPredicting
+    private let personalTrendPredictor: any PersonalTrendPredicting
 
-    init(shadowPredictor: any ShadowRiskPredicting = CoreMLShadowPredictor()) {
+    init(
+        shadowPredictor: any ShadowRiskPredicting = CoreMLShadowPredictor(),
+        personalTrendPredictor: any PersonalTrendPredicting = CoreMLPersonalTrendPredictor()
+    ) {
         self.shadowPredictor = shadowPredictor
+        self.personalTrendPredictor = personalTrendPredictor
     }
 
     func assess(
@@ -1036,6 +1118,230 @@ struct SessionInsightService {
         )
     }
 
+    func personalTrends(
+        sessions history: [Session],
+        profile: UserProfile? = nil,
+        minHistoryCount: Int = 8,
+        useCoreML: Bool = true
+    ) -> PersonalTrendsSummary {
+        let completed = history
+            .filter { !$0.isActive && $0.morningCheckIn != nil }
+            .sorted(by: { $0.startAt > $1.startAt })
+        let sample = Array(completed.prefix(30))
+        guard sample.count >= minHistoryCount else {
+            return PersonalTrendsSummary(
+                status: .insufficientData,
+                findings: [],
+                note: L10n.tr("Недостаточно истории для персональных паттернов. Нужны завершенные сессии с утренним check-in.")
+            )
+        }
+
+        guard let anchorSession = sample.first else {
+            return PersonalTrendsSummary(
+                status: .insufficientData,
+                findings: [],
+                note: L10n.tr("Недостаточно истории для персональных паттернов. Нужны завершенные сессии с утренним check-in.")
+            )
+        }
+        let patterns = personalizedPatterns(
+            current: anchorSession,
+            history: sample,
+            profile: profile
+        )
+
+        let triggers: [(id: String, title: String, match: (Session) -> Bool)] = [
+            (
+                id: "spirits-heavy",
+                title: L10n.tr("Вечера с преобладанием крепких напитков"),
+                match: { session in
+                    guard let dominant = dominantCategory(in: session) else { return false }
+                    return dominant == .spirits || dominant == .liqueur
+                }
+            ),
+            (
+                id: "late-start",
+                title: L10n.tr("Поздний старт сессии (после 21:00)"),
+                match: { session in
+                    Calendar.current.component(.hour, from: session.startAt) >= 21
+                }
+            ),
+            (
+                id: "fast-pace",
+                title: L10n.tr("Темп выше вашего обычного порога"),
+                match: { session in
+                    (averagePace(for: session) ?? 0) >= patterns.paceRiskThreshold
+                }
+            ),
+            (
+                id: "low-hydration",
+                title: L10n.tr("Недобор воды в сессии"),
+                match: { session in
+                    hydrationProgress(for: session, profile: profile) < 0.75
+                }
+            ),
+            (
+                id: "no-meal",
+                title: L10n.tr("Сессии без приема пищи"),
+                match: { session in
+                    session.meals.isEmpty
+                }
+            )
+        ]
+
+        let outcomes: [(id: String, title: String, match: (Session) -> Bool)] = [
+            (
+                id: "headache",
+                title: L10n.tr("утренняя головная боль"),
+                match: { session in
+                    session.morningCheckIn?.symptoms.contains(.headache) == true
+                }
+            ),
+            (
+                id: "fatigue",
+                title: L10n.tr("утренняя усталость"),
+                match: { session in
+                    session.morningCheckIn?.symptoms.contains(.fatigue) == true
+                }
+            ),
+            (
+                id: "heavy-morning",
+                title: L10n.tr("тяжелое утро (самочувствие 0-2/5)"),
+                match: { session in
+                    (session.morningCheckIn?.wellbeingScore ?? 5) <= 2
+                }
+            )
+        ]
+
+        let sampleCount = sample.count
+        let featureBySession = Dictionary(uniqueKeysWithValues: sample.map { session in
+            (session.id, personalTrendFeatures(for: session, profile: profile, patterns: patterns))
+        })
+        let headacheModelAvailable = useCoreML && sample.contains { session in
+            guard let features = featureBySession[session.id] else { return false }
+            return personalTrendPredictor.probability(outputName: "headacheProbability", features: features) != nil
+        }
+        let fatigueModelAvailable = useCoreML && sample.contains { session in
+            guard let features = featureBySession[session.id] else { return false }
+            return personalTrendPredictor.probability(outputName: "fatigueProbability", features: features) != nil
+        }
+        let heavyMorningModelAvailable = useCoreML && sample.contains { session in
+            guard let features = featureBySession[session.id] else { return false }
+            return personalTrendPredictor.probability(outputName: "heavyMorningProbability", features: features) != nil
+        }
+        var findings: [PersonalTrendFinding] = []
+
+        for trigger in triggers {
+            let triggerSessions = sample.filter { trigger.match($0) }
+            let supportCount = triggerSessions.count
+            guard supportCount >= 3 else { continue }
+
+            for outcome in outcomes {
+                let baseCount = sample.filter { outcome.match($0) }.count
+                guard baseCount > 0 else { continue }
+
+                let withTriggerOutcomeCount = triggerSessions.filter { outcome.match($0) }.count
+                guard withTriggerOutcomeCount > 0 else { continue }
+
+                let triggerRate = Double(withTriggerOutcomeCount) / Double(supportCount)
+                let baseRate = Double(baseCount) / Double(sampleCount)
+                let observedLift = triggerRate - baseRate
+
+                let outputName: String
+                let modelAvailable: Bool
+                if outcome.id == "headache" {
+                    outputName = "headacheProbability"
+                    modelAvailable = headacheModelAvailable
+                } else if outcome.id == "fatigue" {
+                    outputName = "fatigueProbability"
+                    modelAvailable = fatigueModelAvailable
+                } else {
+                    outputName = "heavyMorningProbability"
+                    modelAvailable = heavyMorningModelAvailable
+                }
+
+                let triggerModelAverage = triggerSessions.reduce(0.0) { partial, session in
+                    guard let features = featureBySession[session.id] else { return partial }
+                    let predicted = useCoreML
+                        ? (personalTrendPredictor.probability(outputName: outputName, features: features)
+                            ?? fallbackTrendProbability(outputName: outputName, features: features))
+                        : fallbackTrendProbability(outputName: outputName, features: features)
+                    return partial + predicted
+                } / Double(max(1, triggerSessions.count))
+                let baselineModelAverage = sample.reduce(0.0) { partial, session in
+                    guard let features = featureBySession[session.id] else { return partial }
+                    let predicted = useCoreML
+                        ? (personalTrendPredictor.probability(outputName: outputName, features: features)
+                            ?? fallbackTrendProbability(outputName: outputName, features: features))
+                        : fallbackTrendProbability(outputName: outputName, features: features)
+                    return partial + predicted
+                } / Double(max(1, sample.count))
+                let modelLift = triggerModelAverage - baselineModelAverage
+                let lift = modelAvailable
+                    ? (observedLift * 0.65 + modelLift * 0.35)
+                    : observedLift
+
+                guard lift >= 0.12 else { continue }
+
+                let supportShare = Double(supportCount) / Double(sampleCount)
+                let confidence = Int(
+                    clamp((lift * 100) * 0.55 + supportShare * 100 * 0.30 + max(0, modelLift) * 100 * 0.15, min: 1, max: 99)
+                        .rounded()
+                )
+                let note: String
+                if modelAvailable {
+                    note = L10n.format(
+                        "В ваших данных это встречается чаще: %d%% против обычных %d%%. Оценка уточнена CoreML.",
+                        Int((triggerRate * 100).rounded()),
+                        Int((baseRate * 100).rounded())
+                    )
+                } else {
+                    note = L10n.format(
+                        "В ваших данных это встречается чаще: %d%% против обычных %d%%.",
+                        Int((triggerRate * 100).rounded()),
+                        Int((baseRate * 100).rounded())
+                    )
+                }
+
+                findings.append(
+                    PersonalTrendFinding(
+                        id: "\(trigger.id)-\(outcome.id)",
+                        trigger: trigger.title,
+                        outcome: outcome.title,
+                        supportSessions: supportCount,
+                        sampleSessions: sampleCount,
+                        triggerRatePercent: Int((triggerRate * 100).rounded()),
+                        baseRatePercent: Int((baseRate * 100).rounded()),
+                        liftPercent: Int((lift * 100).rounded()),
+                        confidencePercent: confidence,
+                        note: note
+                    )
+                )
+            }
+        }
+
+        let sorted = findings.sorted {
+            if $0.confidencePercent == $1.confidencePercent {
+                return $0.supportSessions > $1.supportSessions
+            }
+            return $0.confidencePercent > $1.confidencePercent
+        }
+        let top = Array(sorted.prefix(3))
+        guard !top.isEmpty else {
+            return PersonalTrendsSummary(
+                status: .ready,
+                findings: [],
+                note: L10n.tr("Явных устойчивых паттернов пока не выявлено. По мере истории подсказки станут точнее.")
+            )
+        }
+        return PersonalTrendsSummary(
+            status: .ready,
+            findings: top,
+            note: (headacheModelAvailable || fatigueModelAvailable || heavyMorningModelAvailable)
+                ? L10n.tr("Это наблюдательные паттерны по вашим данным, уточненные CoreML, а не причинно-следственный вывод.")
+                : L10n.tr("Это наблюдательные паттерны по вашим данным, а не причинно-следственный вывод.")
+        )
+    }
+
     private func makeWaterBalance(
         session: Session,
         profile: UserProfile?,
@@ -1519,6 +1825,54 @@ struct SessionInsightService {
             noWater: session.waters.isEmpty,
             noMeal: session.meals.isEmpty
         )
+    }
+
+    private func personalTrendFeatures(
+        for session: Session,
+        profile: UserProfile?,
+        patterns: PersonalizedPatternAssessment
+    ) -> [String: Double] {
+        let hour = Double(Calendar.current.component(.hour, from: session.startAt))
+        let normalizedHour = clamp((hour - 12.0) / 12.0, min: 0, max: 1)
+        let dominant = dominantCategory(in: session)
+        let spiritsFlag = (dominant == .spirits || dominant == .liqueur) ? 1.0 : 0.0
+        let pace = averagePace(for: session) ?? 0
+        let paceRatio = pace / max(0.2, patterns.paceRiskThreshold)
+        let hydration = hydrationProgress(for: session, profile: profile)
+        let hydrationDeficit = clamp(1 - hydration, min: 0, max: 1)
+        let highPeak = session.cachedPeakBAC >= patterns.peakRiskThreshold ? 1.0 : 0.0
+        let noMeal = session.meals.isEmpty ? 1.0 : 0.0
+
+        return [
+            "spiritsFlag": spiritsFlag,
+            "lateStart": normalizedHour,
+            "paceRatio": clamp(paceRatio, min: 0, max: 3),
+            "hydrationDeficit": hydrationDeficit,
+            "highPeak": highPeak,
+            "noMeal": noMeal
+        ]
+    }
+
+    private func fallbackTrendProbability(
+        outputName: String,
+        features: [String: Double]
+    ) -> Double {
+        let spiritsFlag = features["spiritsFlag"] ?? 0
+        let lateStart = features["lateStart"] ?? 0
+        let paceRatio = features["paceRatio"] ?? 1
+        let hydrationDeficit = features["hydrationDeficit"] ?? 0
+        let highPeak = features["highPeak"] ?? 0
+        let noMeal = features["noMeal"] ?? 0
+
+        let raw: Double
+        if outputName == "headacheProbability" {
+            raw = -2.15 + (0.95 * spiritsFlag) + (0.85 * hydrationDeficit) + (0.50 * paceRatio) + (0.45 * highPeak) + (0.20 * noMeal)
+        } else if outputName == "fatigueProbability" {
+            raw = -2.00 + (0.55 * spiritsFlag) + (0.75 * lateStart) + (0.70 * paceRatio) + (0.40 * hydrationDeficit) + (0.35 * noMeal)
+        } else {
+            raw = -2.10 + (0.80 * spiritsFlag) + (0.60 * lateStart) + (0.90 * paceRatio) + (0.50 * highPeak) + (0.20 * noMeal)
+        }
+        return sigmoid(raw)
     }
 
     private func level(forMorningScore score: Int) -> InsightLevel {

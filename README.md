@@ -15,6 +15,7 @@ AlcoholControl is a harm-reduction iOS app for tracking evening sessions: BAC es
 - Widget and Live Activity.
 - Apple Watch quick actions via shared App Group.
 - CoreML shadow forecast (separate from the main risk estimate) with quality tracking.
+- Personal ML-style trend hints from your own history (observational patterns only).
 - Localization: `ru`, `en`, `es`, `zh-Hans` (+ system language).
 
 ## Tech stack
@@ -76,7 +77,7 @@ xcodebuild \
 
 ## Key technical details
 
-- Data store: SwiftData (`UserProfile`, `Session`, `DrinkEntry`, `WaterEntry`, `MealEntry`, `MorningCheckIn`, `HealthDailySnapshot`, `RiskModelRun`).
+- Data store: SwiftData (`UserProfile`, `Session`, `DrinkEntry`, `WaterEntry`, `MealEntry`, `MorningCheckIn`, `HealthDailySnapshot`, `RiskModelRun`, `PersonalPatternRun`).
 - Shared container for app/widget/watch: `group.maxches.AlcoholControl`.
 - HealthKit entitlement is enabled only in the main app target.
 - The widget reads state snapshots from `UserDefaults(suiteName: appGroupID)`.

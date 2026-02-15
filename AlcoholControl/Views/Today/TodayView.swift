@@ -112,6 +112,7 @@ struct TodayView: View {
     @Query private var profiles: [UserProfile]
     @Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)]) private var healthSnapshots: [HealthDailySnapshot]
     @Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)]) private var riskModelRuns: [RiskModelRun]
+    @Query(sort: [SortDescriptor<PersonalPatternRun>(\.updatedAt, order: .reverse)]) private var personalPatternRuns: [PersonalPatternRun]
 
     @State private var activeSheet: TodaySheet?
     @State private var showEmergencyConfirm = false
@@ -138,6 +139,10 @@ struct TodayView: View {
     @AppStorage("shadowRiskModeEnabled") private var shadowRiskModeEnabled = true
     @AppStorage("shadowRolloutMinHistory") private var shadowRolloutMinHistory = 5
     @AppStorage("shadowRolloutMinConfidence") private var shadowRolloutMinConfidence = 55
+    @AppStorage("personalTrendsEnabled") private var personalTrendsEnabled = true
+    @AppStorage("personalTrendsCoreMLEnabled") private var personalTrendsCoreMLEnabled = true
+    @AppStorage("personalTrendsMinHistory") private var personalTrendsMinHistory = 8
+    @AppStorage("personalTrendsMinConfidence") private var personalTrendsMinConfidence = 55
 
     private let sessionService = SessionService()
     private let calculator = BACCalculator()
@@ -159,6 +164,7 @@ struct TodayView: View {
         _profiles = Query()
         _healthSnapshots = Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)])
         _riskModelRuns = Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)])
+        _personalPatternRuns = Query(sort: [SortDescriptor<PersonalPatternRun>(\.updatedAt, order: .reverse)])
     }
 
     private var activeSession: Session? {
@@ -407,6 +413,18 @@ struct TodayView: View {
         )
         let recoveryIndex = insightService.recoveryIndex(session: session, assessment: insights, health: healthContext, baselines: baselines)
         let patterns = insightService.personalizedPatterns(current: session, history: sessions, profile: profile)
+        let personalTrends = personalTrendsEnabled
+            ? insightService.personalTrends(
+                sessions: sessions,
+                profile: profile,
+                minHistoryCount: personalTrendsMinHistory,
+                useCoreML: personalTrendsCoreMLEnabled
+            )
+            : PersonalTrendsSummary(
+                status: .insufficientData,
+                findings: [],
+                note: L10n.tr("Персональные паттерны выключены в настройках.")
+            )
         let scenarios = insightService.eveningScenarios(for: session, profile: profile, history: sessions)
         let projections = insightService.memoryProjections(for: session, profile: profile, history: sessions)
         let shadowAssessment = shadowRiskModeEnabled
@@ -422,6 +440,11 @@ struct TodayView: View {
         let shouldShowShadowBlock = (shadowAssessment?.status == .ready) &&
             completedHistoryCount >= shadowRolloutMinHistory &&
             (shadowAssessment?.confidencePercent ?? 0) >= shadowRolloutMinConfidence
+        let shouldShowPersonalTrends = personalTrendsEnabled &&
+            personalTrends.status == .ready &&
+            !personalTrends.findings.isEmpty &&
+            completedHistoryCount >= personalTrendsMinHistory &&
+            (personalTrends.findings.first?.confidencePercent ?? 0) >= personalTrendsMinConfidence
         let standardDrinks = standardDrinksInSession(session)
         let consumedWaterMl = session.waters.compactMap(\.volumeMl).reduce(0, +)
         let limitState = sessionLimitState(standardDrinks: standardDrinks)
@@ -456,6 +479,9 @@ struct TodayView: View {
                     patterns: patterns,
                     standardDrinks: standardDrinks
                 )
+                if shouldShowPersonalTrends {
+                    PersonalTrendsCard(summary: personalTrends)
+                }
 
                 EveningInsightsCard(
                     insights: insights,
@@ -587,6 +613,9 @@ struct TodayView: View {
                     morningProbability: shadowAssessment.morningProbabilityPercent ?? 0,
                     memoryProbability: shadowAssessment.memoryProbabilityPercent ?? 0
                 )
+            }
+            if personalTrendsEnabled {
+                recordPersonalTrendRuns(summary: personalTrends)
             }
             updateModelQualityMetricsIfPossible()
         }
@@ -1411,6 +1440,36 @@ struct TodayView: View {
         try? context.save()
     }
 
+    private func recordPersonalTrendRuns(summary: PersonalTrendsSummary) {
+        guard summary.status == .ready else { return }
+        let day = Calendar.current.startOfDay(for: .now)
+        let existingToday = personalPatternRuns.filter { $0.day == day }
+        for run in existingToday {
+            context.delete(run)
+        }
+
+        for finding in summary.findings {
+            let run = PersonalPatternRun(
+                day: day,
+                patternKey: finding.id,
+                trigger: finding.trigger,
+                outcome: finding.outcome,
+                supportSessions: finding.supportSessions,
+                sampleSessions: finding.sampleSessions,
+                triggerRatePercent: finding.triggerRatePercent,
+                baseRatePercent: finding.baseRatePercent,
+                liftPercent: finding.liftPercent,
+                confidencePercent: finding.confidencePercent,
+                note: finding.note
+            )
+            context.insert(run)
+        }
+
+        if !summary.findings.isEmpty {
+            try? context.save()
+        }
+    }
+
     private func updateModelQualityMetricsIfPossible() {
         let calendar = Calendar.current
         var changed = false
@@ -1636,6 +1695,49 @@ private struct TimelineSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct PersonalTrendsCard: View {
+    let summary: PersonalTrendsSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.tr("Персональные паттерны (на основе ваших данных)"))
+                .font(.headline)
+
+            ForEach(summary.findings) { finding in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.format("%@ -> %@", finding.trigger, finding.outcome))
+                        .font(.subheadline.weight(.semibold))
+                    Text(finding.note)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text(
+                        L10n.format(
+                            "Уверенность: %d%% · Сессий: %d из %d",
+                            finding.confidencePercent,
+                            finding.supportSessions,
+                            finding.sampleSessions
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            Text(summary.note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }

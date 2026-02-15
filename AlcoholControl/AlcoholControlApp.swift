@@ -24,7 +24,8 @@ struct AlcoholControlApp: App {
             MealEntry.self,
             MorningCheckIn.self,
             HealthDailySnapshot.self,
-            RiskModelRun.self
+            RiskModelRun.self,
+            PersonalPatternRun.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

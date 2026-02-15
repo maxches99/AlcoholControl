@@ -11,6 +11,7 @@ struct SettingsView: View {
     @Query private var meals: [MealEntry]
     @Query private var checkIns: [MorningCheckIn]
     @Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)]) private var riskModelRuns: [RiskModelRun]
+    @Query(sort: [SortDescriptor<PersonalPatternRun>(\.updatedAt, order: .reverse)]) private var personalPatternRuns: [PersonalPatternRun]
 
     @StateObject private var purchase = PurchaseService.shared
 
@@ -45,6 +46,10 @@ struct SettingsView: View {
     @AppStorage("shadowRiskModeEnabled") private var shadowRiskModeEnabled = true
     @AppStorage("shadowRolloutMinHistory") private var shadowRolloutMinHistory = 5
     @AppStorage("shadowRolloutMinConfidence") private var shadowRolloutMinConfidence = 55
+    @AppStorage("personalTrendsEnabled") private var personalTrendsEnabled = true
+    @AppStorage("personalTrendsCoreMLEnabled") private var personalTrendsCoreMLEnabled = true
+    @AppStorage("personalTrendsMinHistory") private var personalTrendsMinHistory = 8
+    @AppStorage("personalTrendsMinConfidence") private var personalTrendsMinConfidence = 55
     @AppStorage("riskModelVariant") private var riskModelVariant = "A"
 
     private let service = SessionService()
@@ -58,6 +63,7 @@ struct SettingsView: View {
         _meals = Query()
         _checkIns = Query()
         _riskModelRuns = Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)])
+        _personalPatternRuns = Query(sort: [SortDescriptor<PersonalPatternRun>(\.updatedAt, order: .reverse)])
     }
 
     private var profile: UserProfile? {
@@ -127,6 +133,30 @@ struct SettingsView: View {
         }
 
         return L10n.format("MAE: %.1f п.п. · Brier: %.3f. %@", shadowMAE, shadowBrier, deltaText)
+    }
+
+    private var latestPersonalTrendRun: PersonalPatternRun? {
+        personalPatternRuns.first
+    }
+
+    private var personalTrendsSummary: String {
+        guard !personalPatternRuns.isEmpty else {
+            return L10n.tr("Сводка персональных паттернов появится после накопления истории с утренними check-in.")
+        }
+        let top = personalPatternRuns
+            .sorted(by: { $0.confidencePercent > $1.confidencePercent })
+            .prefix(3)
+        let lines = top.map { run in
+            L10n.format(
+                "%@ -> %@ (%d%%, %d/%d)",
+                run.trigger,
+                run.outcome,
+                run.confidencePercent,
+                run.supportSessions,
+                run.sampleSessions
+            )
+        }
+        return lines.joined(separator: " · ")
     }
 
     var body: some View {
@@ -322,6 +352,46 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section(L10n.tr("Персональные паттерны")) {
+                    Toggle(L10n.tr("Включить персональные паттерны"), isOn: $personalTrendsEnabled)
+                    Toggle(L10n.tr("Использовать CoreML для паттернов"), isOn: $personalTrendsCoreMLEnabled)
+
+                    if let latestPersonalTrendRun {
+                        Text(L10n.format("Последнее обновление паттернов: %@", latestPersonalTrendRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.tr("Последнее обновление паттернов: пока нет данных"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Stepper(value: $personalTrendsMinHistory, in: 5...30) {
+                        HStack {
+                            Text(L10n.tr("Мин. завершенных сессий для паттернов"))
+                            Spacer()
+                            Text("\(personalTrendsMinHistory)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Stepper(value: $personalTrendsMinConfidence, in: 30...95, step: 5) {
+                        HStack {
+                            Text(L10n.tr("Мин. уверенность паттерна"))
+                            Spacer()
+                            Text("\(personalTrendsMinConfidence)%")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text(personalTrendsSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(L10n.tr("Паттерны показывают только наблюдаемые связи в ваших данных и не являются медицинским заключением."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section(L10n.tr("Приватность")) {
                     Toggle(L10n.tr("Скрывать BAC в шаринге"), isOn: $hideBACInSharing)
                 }
@@ -443,6 +513,12 @@ struct SettingsView: View {
         }
         for checkIn in checkIns {
             context.delete(checkIn)
+        }
+        for run in riskModelRuns {
+            context.delete(run)
+        }
+        for run in personalPatternRuns {
+            context.delete(run)
         }
         for session in sessions {
             context.delete(session)

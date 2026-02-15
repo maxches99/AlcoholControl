@@ -26,6 +26,25 @@ private struct StubShadowPredictor: ShadowRiskPredicting {
     }
 }
 
+private struct StubPersonalTrendPredictor: PersonalTrendPredicting {
+    let headache: Double?
+    let fatigue: Double?
+    let heavyMorning: Double?
+
+    func probability(outputName: String, features: [String : Double]) -> Double? {
+        switch outputName {
+        case "headacheProbability":
+            return headache
+        case "fatigueProbability":
+            return fatigue
+        case "heavyMorningProbability":
+            return heavyMorning
+        default:
+            return nil
+        }
+    }
+}
+
 struct AlcoholControlTests {
 
     @Test @MainActor func openTodayResetsPendingRoutes() async throws {
@@ -302,6 +321,114 @@ struct AlcoholControlTests {
         #expect(fallbackShadow.note == L10n.tr("Прогноз в shadow-режиме: на основе ваших данных, отдельно от основного расчета."))
         #expect(modelShadow.note == L10n.tr("CoreML shadow-прогноз: на основе ваших данных, отдельно от основного расчета."))
         #expect(fallbackShadow.morningProbabilityPercent != modelShadow.morningProbabilityPercent)
+    }
+
+    @Test func personalTrendsDetectObservedAssociations() {
+        let service = SessionInsightService()
+        let now = Date.now
+        var history: [Session] = []
+
+        for index in 0..<10 {
+            let start = now.addingTimeInterval(-Double(index + 1) * 24 * 3600)
+            let session = Session(
+                startAt: start,
+                endAt: start.addingTimeInterval(2 * 3600),
+                isActive: false,
+                cachedPeakBAC: 0.11,
+                cachedEstimatedSoberAt: start.addingTimeInterval(5 * 3600)
+            )
+            let isSpirits = index < 6
+            session.drinks = [
+                DrinkEntry(
+                    createdAt: start.addingTimeInterval(20 * 60),
+                    volumeMl: 80,
+                    abvPercent: isSpirits ? 40 : 5,
+                    title: isSpirits ? "Whiskey" : "Beer",
+                    category: isSpirits ? .spirits : .beer,
+                    session: session
+                )
+            ]
+            session.waters = [WaterEntry(volumeMl: 300, session: session)]
+            session.meals = [MealEntry(title: "Meal", size: .regular, session: session)]
+            session.morningCheckIn = MorningCheckIn(
+                wellbeingScore: isSpirits ? 2 : 4,
+                symptoms: isSpirits ? [.headache] : [.none],
+                sleepHours: 7,
+                hadWater: true,
+                session: session
+            )
+            history.append(session)
+        }
+
+        let summary = service.personalTrends(sessions: history, profile: nil, minHistoryCount: 8)
+
+        switch summary.status {
+        case .ready:
+            #expect(true)
+        case .insufficientData:
+            #expect(Bool(false), "Expected ready status for trends")
+        }
+        #expect(!summary.findings.isEmpty)
+        #expect(summary.findings.contains(where: { $0.outcome == L10n.tr("утренняя головная боль") }))
+    }
+
+    @Test func personalTrendsUseCoreMLPredictorWhenAvailable() {
+        let now = Date.now
+        var history: [Session] = []
+
+        for index in 0..<10 {
+            let start = now.addingTimeInterval(-Double(index + 1) * 24 * 3600)
+            let session = Session(
+                startAt: start,
+                endAt: start.addingTimeInterval(2 * 3600),
+                isActive: false,
+                cachedPeakBAC: 0.13,
+                cachedEstimatedSoberAt: start.addingTimeInterval(4 * 3600)
+            )
+            let isSpirits = index < 6
+            session.drinks = [
+                DrinkEntry(
+                    createdAt: start.addingTimeInterval(10 * 60),
+                    volumeMl: 120,
+                    abvPercent: isSpirits ? 40 : 5,
+                    title: isSpirits ? "Whiskey" : "Beer",
+                    category: isSpirits ? .spirits : .beer,
+                    session: session
+                )
+            ]
+            session.waters = [WaterEntry(volumeMl: 200, session: session)]
+            session.morningCheckIn = MorningCheckIn(
+                wellbeingScore: isSpirits ? 2 : 4,
+                symptoms: isSpirits ? [.headache] : [.none],
+                sleepHours: 6,
+                hadWater: true,
+                session: session
+            )
+            history.append(session)
+        }
+
+        let baselineService = SessionInsightService(
+            shadowPredictor: StubShadowPredictor(morning: nil, memory: nil),
+            personalTrendPredictor: StubPersonalTrendPredictor(headache: nil, fatigue: nil, heavyMorning: nil)
+        )
+        let modelService = SessionInsightService(
+            shadowPredictor: StubShadowPredictor(morning: nil, memory: nil),
+            personalTrendPredictor: StubPersonalTrendPredictor(headache: 0.90, fatigue: 0.75, heavyMorning: 0.80)
+        )
+
+        let baseline = baselineService.personalTrends(sessions: history, profile: nil, minHistoryCount: 8)
+        let model = modelService.personalTrends(sessions: history, profile: nil, minHistoryCount: 8)
+        let modelDisabled = modelService.personalTrends(
+            sessions: history,
+            profile: nil,
+            minHistoryCount: 8,
+            useCoreML: false
+        )
+
+        #expect(baseline.note == L10n.tr("Это наблюдательные паттерны по вашим данным, а не причинно-следственный вывод."))
+        #expect(model.note == L10n.tr("Это наблюдательные паттерны по вашим данным, уточненные CoreML, а не причинно-следственный вывод."))
+        #expect(modelDisabled.note == L10n.tr("Это наблюдательные паттерны по вашим данным, а не причинно-следственный вывод."))
+        #expect(!model.findings.isEmpty)
     }
 
 }

@@ -18,4 +18,4 @@ jobs:
         run: ./Scripts/generate_shadow_models.sh
 
       - name: Ensure models are up to date
-        run: git diff --exit-code -- AlcoholControl/ML/ShadowMorningRegressor.mlmodel AlcoholControl/ML/ShadowMemoryRegressor.mlmodel
+        run: git diff --exit-code -- AlcoholControl/ML/ShadowMorningRegressor.mlmodel AlcoholControl/ML/ShadowMemoryRegressor.mlmodel AlcoholControl/ML/ShadowTrendHeadacheRegressor.mlmodel AlcoholControl/ML/ShadowTrendFatigueRegressor.mlmodel AlcoholControl/ML/ShadowTrendHeavyMorningRegressor.mlmodel
