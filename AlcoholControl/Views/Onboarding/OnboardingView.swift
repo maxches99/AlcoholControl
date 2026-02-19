@@ -73,7 +73,7 @@ struct OnboardingView: View {
     private var onboardingProfile: some View {
         Form {
             Section(L10n.tr("Профиль для расчёта")) {
-                Stepper(value: $weight, in: 30...200, step: 1) {
+                Stepper(value: $weight, in: unit.weightRange, step: 1) {
                     HStack {
                         Text(L10n.tr("Вес"))
                         Spacer()
@@ -102,6 +102,10 @@ struct OnboardingView: View {
                     .background(.red.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+        }
+        .onChange(of: unit) { oldValue, newValue in
+            let converted = oldValue.convertWeight(weight, to: newValue)
+            weight = newValue.normalizeWeight(converted).rounded()
         }
     }
 

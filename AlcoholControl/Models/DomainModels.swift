@@ -27,6 +27,24 @@ final class UserProfile {
         case imperial
         var id: String { rawValue }
         var weightPlaceholder: String { self == .metric ? "кг" : "lbs" }
+        var weightRange: ClosedRange<Double> {
+            switch self {
+            case .metric:
+                return 30...200
+            case .imperial:
+                return 66...440
+            }
+        }
+
+        func convertWeight(_ value: Double, to target: UnitSystem) -> Double {
+            guard self != target else { return value }
+            let kilograms = self == .metric ? value : value * 0.45359237
+            return target == .metric ? kilograms : kilograms / 0.45359237
+        }
+
+        func normalizeWeight(_ value: Double) -> Double {
+            min(max(value, weightRange.lowerBound), weightRange.upperBound)
+        }
     }
 
     @Attribute(.unique) var id: UUID

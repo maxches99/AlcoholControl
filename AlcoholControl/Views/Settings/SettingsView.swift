@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var sex: UserProfile.BiologicalSex = .unspecified
     @State private var hideBACInSharing = true
     @State private var isInitialized = false
+    @State private var isApplyingUnitConversion = false
     @State private var showDeleteConfirm = false
     @State private var showPaywall = false
     @State private var showSafetyCenter = false
@@ -169,7 +170,7 @@ struct SettingsView: View {
                         Text(L10n.tr("Имперские")).tag(UserProfile.UnitSystem.imperial)
                     }
 
-                    Stepper(value: $weight, in: 30...200, step: 1) {
+                    Stepper(value: $weight, in: unitSystem.weightRange, step: 1) {
                         HStack {
                             Text(L10n.tr("Вес"))
                             Spacer()
@@ -468,8 +469,20 @@ struct SettingsView: View {
                 await loadInitialStateIfNeeded()
                 await purchase.restore()
             }
-            .onChange(of: weight) { _, _ in saveProfileAndRecompute() }
-            .onChange(of: unitSystem) { _, _ in saveProfileAndRecompute() }
+            .onChange(of: weight) { _, _ in
+                if isApplyingUnitConversion {
+                    isApplyingUnitConversion = false
+                    return
+                }
+                saveProfileAndRecompute()
+            }
+            .onChange(of: unitSystem) { oldValue, newValue in
+                guard isInitialized, oldValue != newValue else { return }
+                isApplyingUnitConversion = true
+                let converted = oldValue.convertWeight(weight, to: newValue)
+                weight = newValue.normalizeWeight(converted).rounded()
+                saveProfileAndRecompute()
+            }
             .onChange(of: sex) { _, _ in saveProfileAndRecompute() }
             .onChange(of: hideBACInSharing) { _, _ in saveProfileAndRecompute() }
             .alert(L10n.tr("Удалить все данные?"), isPresented: $showDeleteConfirm) {
@@ -492,7 +505,7 @@ struct SettingsView: View {
     @MainActor
     private func loadInitialStateIfNeeded() async {
         guard !isInitialized else { return }
-        isInitialized = true
+        defer { isInitialized = true }
 
         if let profile {
             weight = profile.weight

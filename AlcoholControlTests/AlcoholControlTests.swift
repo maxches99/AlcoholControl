@@ -131,6 +131,20 @@ struct AlcoholControlTests {
         #expect(session.cachedEstimatedSoberAt != nil)
     }
 
+    @Test func unitSystemConvertsWeightWithoutChangingMass() {
+        let metricWeight = 70.0
+        let pounds = UserProfile.UnitSystem.metric.convertWeight(metricWeight, to: .imperial)
+        let convertedBack = UserProfile.UnitSystem.imperial.convertWeight(pounds, to: .metric)
+
+        #expect(abs(pounds - 154.3) < 0.2)
+        #expect(abs(convertedBack - metricWeight) < 0.01)
+    }
+
+    @Test func imperialWeightNormalizationPreventsTooLowValues() {
+        let normalized = UserProfile.UnitSystem.imperial.normalizeWeight(30)
+        #expect(normalized == 66)
+    }
+
     @Test func morningCheckInOverridesModelMorningRisk() {
         let service = SessionInsightService()
         let now = Date.now
