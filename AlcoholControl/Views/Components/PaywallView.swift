@@ -11,84 +11,100 @@ struct PaywallView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(L10n.tr("Premium"))
-                    .font(.largeTitle.bold())
-                Text(paywallVariant == "B" ? L10n.tr("Контроль вечера + лучшее утро") : L10n.tr("Персональная аналитика и прогноз"))
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-
-                if purchase.sortedProducts.isEmpty {
-                    Text(L10n.tr("$4.99/мес"))
-                        .font(.title2)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.tr("Выберите план"))
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppDesign.Spacing.md) {
+                    VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
+                        Text(L10n.tr("Premium поддержка"))
+                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                            .foregroundStyle(AppDesign.Colors.primaryText)
+                        Text(paywallVariant == "B" ? L10n.tr("Контроль вечера + лучшее утро") : L10n.tr("Персональная аналитика и прогноз"))
                             .font(.headline)
-                        ForEach(purchase.sortedProducts, id: \.id) { product in
-                            Button {
-                                purchase.selectedProductID = product.id
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(planTitle(for: product.id))
-                                            .font(.subheadline.weight(.semibold))
-                                        Text(product.displayPrice)
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                        if let intro = product.subscription?.introductoryOffer {
-                                            Text(L10n.format("Пробный период: %@", intro.period.debugDescription))
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
+                            .foregroundStyle(AppDesign.Colors.secondaryText)
+                    }
+                    .appCard()
+
+                    if purchase.sortedProducts.isEmpty {
+                        Text(L10n.tr("$4.99/мес"))
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(AppDesign.Colors.primaryText)
+                            .appCard()
+                    } else {
+                        VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
+                            Text(L10n.tr("Выберите план"))
+                                .font(.headline)
+                                .foregroundStyle(AppDesign.Colors.primaryText)
+                            ForEach(purchase.sortedProducts, id: \.id) { product in
+                                Button {
+                                    purchase.selectedProductID = product.id
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(planTitle(for: product.id))
+                                                .font(.subheadline.weight(.semibold))
+                                            Text(product.displayPrice)
+                                                .font(.footnote)
+                                                .foregroundStyle(AppDesign.Colors.secondaryText)
+                                            if let intro = product.subscription?.introductoryOffer {
+                                                Text(L10n.format("Пробный период: %@", intro.period.debugDescription))
+                                                    .font(.caption2)
+                                                    .foregroundStyle(AppDesign.Colors.secondaryText)
+                                            }
                                         }
+                                        Spacer()
+                                        Image(systemName: purchase.selectedProductID == product.id ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(purchase.selectedProductID == product.id ? AppDesign.Colors.success : AppDesign.Colors.secondaryText)
                                     }
-                                    Spacer()
-                                    Image(systemName: purchase.selectedProductID == product.id ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(purchase.selectedProductID == product.id ? .green : .secondary)
+                                    .padding(10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: AppDesign.Radius.sm, style: .continuous)
+                                            .fill(AppDesign.Colors.background)
+                                    )
                                 }
-                                .padding(10)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .appCard()
+                    }
+
+                    VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
+                        Label(L10n.tr("Расширенная аналитика BAC и воды"), systemImage: "chart.line.uptrend.xyaxis")
+                        Label(L10n.tr("История паттернов и трендов"), systemImage: "clock.arrow.circlepath")
+                        Label(L10n.tr("Персональные цели вечера и динамика риска"), systemImage: "target")
+                        Label(L10n.tr("Отмена в любой момент"), systemImage: "checkmark.circle")
+                    }
+                    .foregroundStyle(AppDesign.Colors.primaryText)
+                    .appCard()
+
+                    Button(isLoading ? L10n.tr("Оформление...") : L10n.tr("Continue/Subscribe")) {
+                        Task { await subscribe() }
+                    }
+                    .buttonStyle(AppPrimaryButtonStyle())
+                    .disabled(isLoading)
+
+                    Button(L10n.tr("Restore purchases")) {
+                        Task { await restore() }
+                    }
+                    .buttonStyle(AppSecondaryButtonStyle())
+
+                    HStack {
+                        Link(L10n.tr("Terms"), destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                        Spacer()
+                        Link(L10n.tr("Privacy"), destination: URL(string: "https://www.termsfeed.com/live/3f4f77e2-9d7c-4ece-b68d-cac5dc5c2ec8")!)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(AppDesign.Colors.secondaryText)
+                    .padding(.horizontal, AppDesign.Spacing.xs)
+
+                    if !statusMessage.isEmpty {
+                        Text(statusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(AppDesign.Colors.secondaryText)
+                            .padding(.horizontal, AppDesign.Spacing.xs)
                     }
                 }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Label(L10n.tr("Расширенная аналитика BAC и воды"), systemImage: "chart.line.uptrend.xyaxis")
-                    Label(L10n.tr("История паттернов и трендов"), systemImage: "clock.arrow.circlepath")
-                    Label(L10n.tr("Персональные цели вечера и динамика риска"), systemImage: "target")
-                    Label(L10n.tr("Отмена в любой момент"), systemImage: "checkmark.circle")
-                }
-
-                Button(isLoading ? L10n.tr("Оформление...") : L10n.tr("Continue/Subscribe")) {
-                    Task { await subscribe() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-
-                Button(L10n.tr("Restore purchases")) {
-                    Task { await restore() }
-                }
-                .buttonStyle(.bordered)
-
-                HStack {
-                    Link(L10n.tr("Terms"), destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                    Spacer()
-                    Link(L10n.tr("Privacy"), destination: URL(string: "https://www.termsfeed.com/live/3f4f77e2-9d7c-4ece-b68d-cac5dc5c2ec8")!)
-                }
-                .font(.footnote)
-
-                if !statusMessage.isEmpty {
-                    Text(statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
+                .padding(AppDesign.Spacing.md)
             }
-            .padding()
+            .appScreenBackground()
             .navigationTitle(L10n.tr("Paywall"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

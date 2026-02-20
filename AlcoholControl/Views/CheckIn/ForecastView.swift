@@ -66,6 +66,35 @@ struct ForecastView: View {
         )
     }
 
+    private var shadowAssessment: ShadowRiskAssessment {
+        insightService.assessShadow(
+            session: session,
+            profile: profile,
+            health: healthContext,
+            history: sessions,
+            baseline: assessment
+        )
+    }
+
+    private var coreMLInsightBundle: SessionInsightBundle {
+        insightService.makeCoreMLInsightBundle(
+            assessment: assessment,
+            shadow: shadowAssessment,
+            patterns: patternAssessment,
+            recovery: recoveryIndex
+        )
+    }
+
+    private var coreMLInsightItems: [SessionInsight] {
+        [
+            coreMLInsightBundle.pattern,
+            coreMLInsightBundle.overloadRisk,
+            coreMLInsightBundle.protectiveFactors,
+            coreMLInsightBundle.recommendation,
+            coreMLInsightBundle.recoveryForecast
+        ]
+    }
+
     private var standardDrinks: Double {
         session.drinks.reduce(0.0) { partial, drink in
             let grams = drink.volumeMl * (drink.abvPercent / 100) * 0.789
@@ -409,6 +438,23 @@ struct ForecastView: View {
                 .background(.thinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.tr("CoreML-анализ сессии"))
+                        .font(.headline)
+
+                    ForEach(coreMLInsightItems) { insight in
+                        coreMLInsightRow(insight)
+                    }
+
+                    Text(coreMLInsightBundle.note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.tr("Персональные факторы"))
                         .font(.headline)
@@ -684,6 +730,39 @@ struct ForecastView: View {
         case .high:
             return .red
         }
+    }
+
+    private func insightColor(_ severity: SessionInsight.Severity) -> Color {
+        switch severity {
+        case .low:
+            return .green
+        case .medium:
+            return .orange
+        case .high:
+            return .red
+        }
+    }
+
+    private func coreMLInsightRow(_ insight: SessionInsight) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(insight.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if let confidence = insight.confidencePercent {
+                    Text(L10n.format("Уверенность: ~%d%%", confidence))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(insight.message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(insightColor(insight.severity).opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private func hydrationProgress(for session: Session) -> Double {

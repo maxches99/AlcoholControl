@@ -71,6 +71,29 @@ struct EveningInsightAssessment {
     let actionsNow: [String]
 }
 
+struct SessionInsight: Identifiable {
+    enum Severity {
+        case low
+        case medium
+        case high
+    }
+
+    let id: String
+    let title: String
+    let message: String
+    let severity: Severity
+    let confidencePercent: Int?
+}
+
+struct SessionInsightBundle {
+    let pattern: SessionInsight
+    let overloadRisk: SessionInsight
+    let protectiveFactors: SessionInsight
+    let recommendation: SessionInsight
+    let recoveryForecast: SessionInsight
+    let note: String
+}
+
 enum ShadowRiskStatus {
     case ready
     case insufficientData
@@ -983,6 +1006,68 @@ struct SessionInsightService {
                 comment: comment
             )
         }
+    }
+
+    func makeCoreMLInsightBundle(
+        assessment: EveningInsightAssessment,
+        shadow: ShadowRiskAssessment?,
+        patterns: PersonalizedPatternAssessment,
+        recovery: RecoveryIndexSnapshot
+    ) -> SessionInsightBundle {
+        let patternMessage = patterns.notes.first
+            ?? L10n.tr("Текущая сессия пока в пределах ваших обычных паттернов.")
+        let overloadPercent = (shadow?.status == .ready ? shadow?.morningProbabilityPercent : nil)
+            ?? assessment.morningProbabilityPercent
+        let overloadConfidence = (shadow?.status == .ready ? shadow?.confidencePercent : nil)
+            ?? assessment.confidence.scorePercent
+
+        let protectiveMessage: String
+        if assessment.waterBalance.progress >= 0.85, !assessment.mealImpact.isEmpty {
+            protectiveMessage = L10n.tr("Гидратация и прием пищи в сессии помогают снизить утреннюю нагрузку.")
+        } else if assessment.waterBalance.progress >= 0.85 {
+            protectiveMessage = L10n.tr("Гидратация в сессии лучше обычной и обычно смягчает утро.")
+        } else {
+            protectiveMessage = L10n.tr("Вода и еда в середине сессии обычно снижают риск более тяжелого утра.")
+        }
+
+        return SessionInsightBundle(
+            pattern: SessionInsight(
+                id: "pattern",
+                title: L10n.tr("Паттерн сессии"),
+                message: patternMessage,
+                severity: .medium,
+                confidencePercent: assessment.confidence.scorePercent
+            ),
+            overloadRisk: SessionInsight(
+                id: "overload-risk",
+                title: L10n.tr("Риск перегруза"),
+                message: L10n.format("Вероятность более тяжелого утра сейчас около %d%%.", overloadPercent),
+                severity: severity(from: assessment.morningRisk),
+                confidencePercent: overloadConfidence
+            ),
+            protectiveFactors: SessionInsight(
+                id: "protective-factors",
+                title: L10n.tr("Защитные факторы"),
+                message: protectiveMessage,
+                severity: .low,
+                confidencePercent: nil
+            ),
+            recommendation: SessionInsight(
+                id: "soft-recommendation",
+                title: L10n.tr("Мягкая рекомендация"),
+                message: L10n.tr("Сделайте паузу 30-40 минут и добавьте воду 300-500 мл."),
+                severity: .low,
+                confidencePercent: nil
+            ),
+            recoveryForecast: SessionInsight(
+                id: "recovery-forecast",
+                title: L10n.tr("Прогноз восстановления"),
+                message: L10n.format("Ориентир восстановления: %@.", recovery.headline),
+                severity: severity(from: recovery.level),
+                confidencePercent: nil
+            ),
+            note: L10n.tr("Оценка основана на ваших предыдущих данных и не является медицинским заключением.")
+        )
     }
 
     func weeklySnapshot(
@@ -1927,6 +2012,17 @@ struct SessionInsightService {
         case ..<2: return .low
         case 2...4: return .medium
         default: return .high
+        }
+    }
+
+    private func severity(from level: InsightLevel) -> SessionInsight.Severity {
+        switch level {
+        case .low:
+            return .low
+        case .medium:
+            return .medium
+        case .high:
+            return .high
         }
     }
 

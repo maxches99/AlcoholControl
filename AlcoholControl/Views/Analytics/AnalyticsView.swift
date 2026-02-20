@@ -280,10 +280,45 @@ struct AnalyticsView: View {
         return (isOK, text)
     }
 
+    private var weekInterval: DateInterval {
+        let end = calendar.startOfDay(for: .now)
+        let start = calendar.date(byAdding: .day, value: -6, to: end) ?? end
+        return DateInterval(start: start, end: end)
+    }
+
+    private var weekdayUnitItems: [WeekdayUnits] {
+        (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekInterval.start) else { return nil }
+            let start = calendar.startOfDay(for: day)
+            guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
+            let units = weekSessions
+                .filter { session in
+                    session.startAt >= start && session.startAt < end
+                }
+                .reduce(0.0) { partial, session in
+                    partial + standardUnits(in: session)
+                }
+            return WeekdayUnits(
+                id: offset,
+                label: weekdayLabel(for: start),
+                units: units
+            )
+        }
+    }
+
+    private var averageWeeklyUnits: Double {
+        guard !weekdayUnitItems.isEmpty else { return 0 }
+        return weekdayUnitItems.reduce(0, { $0 + $1.units }) / Double(weekdayUnitItems.count)
+    }
+
+    private var averageCheckInText: String {
+        weeklySnapshot.averageWellbeingScore.map { String(format: "%.1f/5", $0) } ?? L10n.tr("Нет")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     heroCard
                     if purchase.isPremium {
                         premiumContent
@@ -293,6 +328,19 @@ struct AnalyticsView: View {
                 }
                 .padding()
             }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.08, blue: 0.08),
+                        Color(red: 0.08, green: 0.10, blue: 0.10),
+                        Color(red: 0.05, green: 0.08, blue: 0.07)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .tint(AppDesign.Colors.primary)
             .navigationTitle(L10n.tr("Аналитика"))
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
@@ -335,318 +383,399 @@ struct AnalyticsView: View {
     }
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.tr("Ваши тренды"))
-                .font(.headline)
-            Text(L10n.tr("Оценка по последним сессиям. Все значения приблизительные."))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 10) {
-                metricChip(title: L10n.tr("Ср. peak BAC"), value: avgPeakBAC > 0 ? String(format: "%.3f", avgPeakBAC) : L10n.tr("Нет"))
-                metricChip(title: L10n.tr("Ср. вода"), value: String(format: "%.1f", avgWaterMarks))
-                metricChip(title: L10n.tr("Сессий"), value: "\(sessions.count)")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.tr("Weekly safety digest"))
+                        .font(.system(.title2, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(weekInterval.start..<weekInterval.end, format: .interval.month(.abbreviated).day())
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                Spacer()
+                Image(systemName: "calendar")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(12)
+                    .background(Color.black.opacity(0.15))
+                    .clipShape(Circle())
             }
-            Text(weeklySnapshot.headline)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: "checkmark.circle")
+                    Text(weeklySnapshot.headline)
+                }
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color(red: 0.36, green: 0.44, blue: 0.36))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.86))
+                .clipShape(Capsule())
+
+                HStack(spacing: 10) {
+                    metricChip(
+                        title: L10n.tr("Ср. peak BAC"),
+                        value: avgPeakBAC > 0 ? String(format: "%.3f", avgPeakBAC) : L10n.tr("Нет")
+                    )
+                    metricChip(title: L10n.tr("Ср. вода"), value: String(format: "%.1f", avgWaterMarks))
+                    metricChip(title: L10n.tr("Сессий"), value: "\(sessions.count)")
+                }
+            }
         }
-        .padding()
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.teal.opacity(0.15), .blue.opacity(0.12)],
+                colors: [
+                    Color(red: 0.63, green: 0.69, blue: 0.60),
+                    Color(red: 0.58, green: 0.65, blue: 0.56)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(alignment: .trailing) {
+            Circle()
+                .fill(Color.white.opacity(0.16))
+                .frame(width: 190, height: 190)
+                .offset(x: 70, y: 20)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     private var premiumContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.tr("Premium аналитика"))
-                .font(.title3.weight(.semibold))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(.white)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Пик BAC по сессиям"))
-                    .font(.headline)
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr("Распределение напитков"))
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                            Text(L10n.tr("Сессий (7д)"))
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.66))
+                        }
+                        Spacer()
+                        Text(L10n.format("Avg: %.1f", averageWeeklyUnits))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.28))
+                            .clipShape(Capsule())
+                    }
 
-                if recentSessions.isEmpty {
-                    Text(L10n.tr("Пока нет данных для графика"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(recentSessions) { session in
-                            HStack {
-                                Text(session.startAt, format: .dateTime.month().day())
+                    let maxUnits = max(1.0, weekdayUnitItems.map(\.units).max() ?? 1)
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ForEach(weekdayUnitItems) { item in
+                            VStack(spacing: 8) {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color(red: 0.82, green: 0.64, blue: 0.66))
+                                    .frame(height: max(6, 140 * (item.units / maxUnits)))
+                                Text(item.label)
                                     .font(.caption)
-                                    .frame(width: 56, alignment: .leading)
-
-                                GeometryReader { proxy in
-                                    let width = max(4, proxy.size.width * min(1, session.cachedPeakBAC / 0.20))
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(.blue.opacity(0.75))
-                                        .frame(width: width, height: 10)
-                                }
-                                .frame(height: 10)
-
-                                Text(String(format: "%.3f", session.cachedPeakBAC))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.white.opacity(0.7))
                             }
-                            .frame(height: 16)
+                            .frame(maxWidth: .infinity)
                         }
                     }
-                    .frame(minHeight: CGFloat(max(56, recentSessions.count * 22)))
-                }
-            }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .frame(height: 168, alignment: .bottom)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Вода по сессиям"))
-                    .font(.headline)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.tr("Пик BAC по сессиям"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.9))
 
-                ForEach(recentSessions) { session in
-                    HStack {
-                        Text(session.startAt, format: .dateTime.month().day())
-                        Spacer()
-                        Text(L10n.format("%d отметок воды", session.waters.count))
-                            .foregroundStyle(.secondary)
+                        if recentSessions.isEmpty {
+                            Text(L10n.tr("Пока нет данных для графика"))
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.66))
+                        } else {
+                            ForEach(recentSessions) { session in
+                                HStack(spacing: 8) {
+                                    Text(session.startAt, format: .dateTime.month().day())
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .frame(width: 48, alignment: .leading)
+                                    GeometryReader { proxy in
+                                        let width = max(6, proxy.size.width * min(1, session.cachedPeakBAC / 0.20))
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(Color(red: 0.44, green: 0.62, blue: 0.92))
+                                            .frame(width: width, height: 8)
+                                    }
+                                    .frame(height: 8)
+                                    Text(String(format: "%.3f", session.cachedPeakBAC))
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                }
+                                .frame(height: 14)
+                            }
+                        }
                     }
                 }
             }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Weekly safety digest"))
-                .font(.headline)
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Heavy mornings"), value: "\(weeklySnapshot.heavyMorningCount)")
-                    metricChip(title: L10n.tr("High memory risk"), value: "\(weeklySnapshot.highMemoryRiskCount)")
-                }
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Hydration hit rate"), value: "\(weeklySnapshot.hydrationHitRatePercent)%")
-                    metricChip(title: L10n.tr("Meal coverage"), value: "\(weeklySnapshot.mealCoveragePercent)%")
-                }
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Avg peak"), value: weeklySnapshot.averagePeakBAC > 0 ? String(format: "%.3f", weeklySnapshot.averagePeakBAC) : L10n.tr("Нет"))
-                    metricChip(
-                        title: L10n.tr("Avg check-in"),
-                        value: weeklySnapshot.averageWellbeingScore.map { String(format: "%.1f/5", $0) } ?? L10n.tr("Нет")
-                    )
-                }
+            HStack(spacing: 12) {
+                dashboardMiniCard(
+                    title: L10n.tr("Гидратация"),
+                    value: "\(weeklySnapshot.hydrationHitRatePercent)%",
+                    subtitle: L10n.tr("Hydration hit rate")
+                )
+                dashboardMiniCard(
+                    title: L10n.tr("Avg check-in"),
+                    value: averageCheckInText,
+                    subtitle: L10n.tr("Weekly safety digest")
+                )
             }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(L10n.tr("Шаги восстановления (Apple Health)"))
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.tr("Вода по сессиям"))
                         .font(.headline)
-                    Spacer()
-                    if syncingSteps {
-                        ProgressView()
-                            .controlSize(.small)
+                        .foregroundStyle(.white)
+
+                    ForEach(recentSessions) { session in
+                        HStack {
+                            Text(session.startAt, format: .dateTime.month().day())
+                                .foregroundStyle(.white.opacity(0.78))
+                            Spacer()
+                            Text(L10n.format("%d отметок воды", session.waters.count))
+                                .foregroundStyle(.white.opacity(0.66))
+                        }
+                        .font(.subheadline)
                     }
                 }
+            }
 
-                HStack(spacing: 8) {
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.tr("Weekly safety digest"))
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Heavy mornings"), value: "\(weeklySnapshot.heavyMorningCount)")
+                        metricChip(title: L10n.tr("High memory risk"), value: "\(weeklySnapshot.highMemoryRiskCount)")
+                    }
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Hydration hit rate"), value: "\(weeklySnapshot.hydrationHitRatePercent)%")
+                        metricChip(title: L10n.tr("Meal coverage"), value: "\(weeklySnapshot.mealCoveragePercent)%")
+                    }
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Avg peak"), value: weeklySnapshot.averagePeakBAC > 0 ? String(format: "%.3f", weeklySnapshot.averagePeakBAC) : L10n.tr("Нет"))
+                        metricChip(title: L10n.tr("Avg check-in"), value: averageCheckInText)
+                    }
+                }
+            }
+
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(L10n.tr("Шаги восстановления (Apple Health)"))
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Spacer()
+                        if syncingSteps {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white.opacity(0.9))
+                        }
+                    }
+
                     metricChip(
                         title: L10n.tr("Среднее шагов"),
                         value: averageRecoverySteps.map { "\($0)" } ?? L10n.tr("Нет")
                     )
-                    metricChip(
-                        title: L10n.tr("Покрытие шагов"),
-                        value: "\(stepCoveragePercent)%"
-                    )
-                }
-
-                HStack(spacing: 8) {
+                    metricChip(title: L10n.tr("Покрытие шагов"), value: "\(stepCoveragePercent)%")
                     metricChip(title: L10n.tr("Низкая активность"), value: "\(lowActivityRecoveryCount)")
                     metricChip(title: L10n.tr("Сессий (7д)"), value: "\(weekSessions.count)")
-                }
 
-                Button(syncingSteps ? L10n.tr("Синхронизация...") : L10n.tr("Синхронизировать шаги")) {
-                    Task { await syncRecoveryStepsFromHealth() }
-                }
-                .buttonStyle(.bordered)
-                .disabled(syncingSteps)
+                    Button(syncingSteps ? L10n.tr("Синхронизация...") : L10n.tr("Синхронизировать шаги")) {
+                        Task { await syncRecoveryStepsFromHealth() }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                    .disabled(syncingSteps)
 
-                if !stepSyncStatus.isEmpty {
-                    Text(stepSyncStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Статус недельных целей"))
-                    .font(.headline)
-                limitRow(heavyMorningStatus)
-                limitRow(memoryRiskStatus)
-                limitRow(hydrationStatus)
-            }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Тренд восстановления и рисков"))
-                    .font(.headline)
-                if trendSnapshots.isEmpty {
-                    Text(L10n.tr("Пока нет завершенных сессий для тренда"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(trendSnapshots) { item in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(item.date, format: .dateTime.month().day())
-                                    .font(.caption.weight(.semibold))
-                                Spacer()
-                                Text(L10n.format("Recovery %d/100", item.recoveryScore))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            trendLine(
-                                title: L10n.tr("Recovery"),
-                                value: Double(item.recoveryScore) / 100,
-                                tint: levelColor(item.recoveryLevel)
-                            )
-                            trendLine(
-                                title: L10n.tr("Morning risk"),
-                                value: Double(item.morningRiskPercent) / 100,
-                                tint: levelColor(item.morningRiskLevel)
-                            )
-                            trendLine(
-                                title: L10n.tr("Memory risk"),
-                                value: Double(item.memoryRiskPercent) / 100,
-                                tint: levelColor(item.memoryRiskLevel)
-                            )
-                        }
-                        .padding(8)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    if !stepSyncStatus.isEmpty {
+                        Text(stepSyncStatus)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.66))
                     }
                 }
             }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.tr("Качество процесса вечера"))
-                    .font(.headline)
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Process quality"), value: "\(processQualityScore)/100")
-                    metricChip(title: L10n.tr("Recovery load"), value: "\(recoveryLoadScore)/100")
-                }
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Avg water deficit"), value: "\(averageHydrationDeficitMl) ml")
-                    metricChip(title: L10n.tr("Meal timing"), value: "\(mealTimingHits)/\(trendSessions.count)")
-                }
-                HStack(spacing: 8) {
-                    metricChip(title: L10n.tr("Safe streak"), value: "\(safeSessionStreak)")
-                    metricChip(title: L10n.tr("Pace hits"), value: "\(paceHits)/\(weekSessions.count)")
-                }
-                Text(weeklyFocusText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Text(L10n.tr("Shareable weekly summary"))
-                        .font(.headline)
-                    if usesAISummaryText {
-                        Text(L10n.tr("AI"))
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.blue.opacity(0.14))
-                            .clipShape(Capsule())
-                    }
-                }
-                if weeklySummaryLoading {
-                    Text(L10n.tr("Формируем персональное пояснение..."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(weeklySummaryText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button(weeklySummaryCopied ? L10n.tr("Скопировано") : L10n.tr("Скопировать summary")) {
-                    copyWeeklySummary()
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            if !triggerPatterns.hits.isEmpty {
+            analyticsCard {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L10n.tr("Паттерны триггеров"))
+                        .font(.system(.title3, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white)
+                    limitRow(heavyMorningStatus)
+                    limitRow(memoryRiskStatus)
+                    limitRow(hydrationStatus)
+                }
+            }
+
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.tr("Тренд восстановления и рисков"))
                         .font(.headline)
-                    Text(L10n.tr("Паттерны, которые чаще ведут к тяжелому утру или риску памяти."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(triggerPatterns.hits) { hit in
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Text(hit.title)
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                Text(hit.value)
-                                    .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    if trendSnapshots.isEmpty {
+                        Text(L10n.tr("Пока нет завершенных сессий для тренда"))
+                            .foregroundStyle(.white.opacity(0.66))
+                    } else {
+                        ForEach(trendSnapshots) { item in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(item.date, format: .dateTime.month().day())
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.84))
+                                    Spacer()
+                                    Text(L10n.format("Recovery %d/100", item.recoveryScore))
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.66))
+                                }
+                                trendLine(
+                                    title: L10n.tr("Recovery"),
+                                    value: Double(item.recoveryScore) / 100,
+                                    tint: levelColor(item.recoveryLevel)
+                                )
+                                trendLine(
+                                    title: L10n.tr("Morning risk"),
+                                    value: Double(item.morningRiskPercent) / 100,
+                                    tint: levelColor(item.morningRiskLevel)
+                                )
+                                trendLine(
+                                    title: L10n.tr("Memory risk"),
+                                    value: Double(item.memoryRiskPercent) / 100,
+                                    tint: levelColor(item.memoryRiskLevel)
+                                )
                             }
-                            Text(hit.impact)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            .padding(10)
+                            .background(Color.white.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .padding(8)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                 }
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+
+            analyticsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.tr("Качество процесса вечера"))
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Process quality"), value: "\(processQualityScore)/100")
+                        metricChip(title: L10n.tr("Recovery load"), value: "\(recoveryLoadScore)/100")
+                    }
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Avg water deficit"), value: "\(averageHydrationDeficitMl) ml")
+                        metricChip(title: L10n.tr("Meal timing"), value: "\(mealTimingHits)/\(trendSessions.count)")
+                    }
+                    HStack(spacing: 8) {
+                        metricChip(title: L10n.tr("Safe streak"), value: "\(safeSessionStreak)")
+                        metricChip(title: L10n.tr("Pace hits"), value: "\(paceHits)/\(weekSessions.count)")
+                    }
+                    Text(weeklyFocusText)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.66))
+                }
+            }
+
+            analyticsCard(tint: Color(red: 0.83, green: 0.79, blue: 0.68).opacity(0.2)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text(L10n.tr("Shareable weekly summary"))
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        if usesAISummaryText {
+                            Text(L10n.tr("AI"))
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.white.opacity(0.14))
+                                .clipShape(Capsule())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    if weeklySummaryLoading {
+                        Text(L10n.tr("Формируем персональное пояснение..."))
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.66))
+                    }
+                    Text(weeklySummaryText)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.8))
+                    Button(weeklySummaryCopied ? L10n.tr("Скопировано") : L10n.tr("Скопировать summary")) {
+                        copyWeeklySummary()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                }
+            }
+
+            if !triggerPatterns.hits.isEmpty {
+                analyticsCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L10n.tr("Паттерны триггеров"))
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Text(L10n.tr("Паттерны, которые чаще ведут к тяжелому утру или риску памяти."))
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.66))
+                        ForEach(triggerPatterns.hits) { hit in
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack {
+                                    Text(hit.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.9))
+                                    Spacer()
+                                    Text(hit.value)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                }
+                                Text(hit.impact)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.66))
+                            }
+                            .padding(10)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+                }
             }
 
             if let personalizedPattern {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.tr("Персональные паттерны"))
-                        .font(.headline)
-                    HStack(spacing: 8) {
-                        trendChip(title: L10n.tr("Пик BAC"), direction: personalizedPattern.peakTrend)
-                        trendChip(title: L10n.tr("Гидратация"), direction: personalizedPattern.hydrationTrend)
-                    }
-                    if let wellbeingTrend = personalizedPattern.wellbeingTrend {
-                        trendChip(title: L10n.tr("Чек-ин"), direction: wellbeingTrend)
-                    }
-                    Text(L10n.format("Серия воды: %d · Серия еды: %d", personalizedPattern.waterStreak, personalizedPattern.mealStreak))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    ForEach(personalizedPattern.notes, id: \.self) { note in
-                        Text("• \(note)")
+                analyticsCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L10n.tr("Персональные паттерны"))
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        HStack(spacing: 8) {
+                            trendChip(title: L10n.tr("Пик BAC"), direction: personalizedPattern.peakTrend)
+                            trendChip(title: L10n.tr("Гидратация"), direction: personalizedPattern.hydrationTrend)
+                        }
+                        if let wellbeingTrend = personalizedPattern.wellbeingTrend {
+                            trendChip(title: L10n.tr("Чек-ин"), direction: wellbeingTrend)
+                        }
+                        Text(L10n.format("Серия воды: %d · Серия еды: %d", personalizedPattern.waterStreak, personalizedPattern.mealStreak))
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.66))
+                        ForEach(personalizedPattern.notes, id: \.self) { note in
+                            Text("• \(note)")
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
                     }
                 }
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
             Button(L10n.tr("Открыть Premium: Привычки")) {
@@ -659,10 +788,11 @@ struct AnalyticsView: View {
     private var lockedContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(L10n.tr("Premium аналитика"))
-                .font(.title2)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
 
             Text(L10n.tr("Откройте детальные тренды BAC, динамику воды и персональные паттерны."))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.7))
 
             lockedCard(title: L10n.tr("Пик BAC по неделям"))
             lockedCard(title: L10n.tr("Распределение напитков"))
@@ -673,9 +803,17 @@ struct AnalyticsView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        .padding()
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.09), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
     }
 
     private func lockedCard(title: String) -> some View {
@@ -685,17 +823,17 @@ struct AnalyticsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                     Text(L10n.tr("Доступно в Premium"))
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.66))
                 }
                 Spacer()
                 Image(systemName: "lock.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.66))
             }
             .padding()
-            .background(.thinMaterial)
+            .background(Color.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -705,14 +843,15 @@ struct AnalyticsView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.62))
             Text(value)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(10)
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func trendLine(title: String, value: Double, tint: Color) -> some View {
@@ -720,11 +859,11 @@ struct AnalyticsView: View {
             HStack {
                 Text(title)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.66))
                 Spacer()
                 Text("\(Int((min(1, max(0, value)) * 100).rounded()))%")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.66))
             }
             ProgressView(value: min(1, max(0, value)))
                 .tint(tint)
@@ -737,15 +876,16 @@ struct AnalyticsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.66))
                 Text(direction.title.capitalized)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
             }
             Spacer()
         }
-        .padding(8)
-        .background(trendColor(direction).opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(10)
+        .background(trendColor(direction).opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func limitRow(_ status: (ok: Bool, text: String)) -> some View {
@@ -754,8 +894,68 @@ struct AnalyticsView: View {
                 .foregroundStyle(status.ok ? .green : .orange)
             Text(status.text)
                 .font(.footnote)
+                .foregroundStyle(.white.opacity(0.82))
             Spacer()
         }
+        .padding(10)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func analyticsCard<Content: View>(
+        tint: Color = Color.white.opacity(0.07),
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint, Color.black.opacity(0.20)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+    }
+
+    private func dashboardMiniCard(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.66))
+            Text(value)
+                .font(.system(size: 48, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
+                .foregroundStyle(.white)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.09), Color.white.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+    }
+
+    private func weekdayLabel(for date: Date) -> String {
+        let index = calendar.component(.weekday, from: date) - 1
+        guard calendar.shortWeekdaySymbols.indices.contains(index) else { return "-" }
+        return String(calendar.shortWeekdaySymbols[index].prefix(1)).uppercased()
     }
 
     private func trendIcon(_ direction: TrendDirection) -> String {
@@ -782,12 +982,16 @@ struct AnalyticsView: View {
         }
     }
 
-    private func averagePace(for session: Session) -> Double {
-        let durationHours = max(0.1, (session.endAt ?? .now).timeIntervalSince(session.startAt) / 3600)
-        let standardDrinks = session.drinks.reduce(0.0) { partial, drink in
+    private func standardUnits(in session: Session) -> Double {
+        session.drinks.reduce(0.0) { partial, drink in
             let grams = drink.volumeMl * (drink.abvPercent / 100) * 0.789
             return partial + (grams / 14.0)
         }
+    }
+
+    private func averagePace(for session: Session) -> Double {
+        let durationHours = max(0.1, (session.endAt ?? .now).timeIntervalSince(session.startAt) / 3600)
+        let standardDrinks = standardUnits(in: session)
         guard standardDrinks > 0 else { return 0 }
         return standardDrinks / durationHours
     }
@@ -880,6 +1084,12 @@ private struct TrendSnapshot: Identifiable {
     let memoryRiskPercent: Int
     let memoryRiskLevel: InsightLevel
     let hydrationDeficitMl: Int
+}
+
+private struct WeekdayUnits: Identifiable {
+    let id: Int
+    let label: String
+    let units: Double
 }
 
 private struct PremiumHabitsView: View {

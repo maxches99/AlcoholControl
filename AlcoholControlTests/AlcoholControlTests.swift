@@ -337,6 +337,68 @@ struct AlcoholControlTests {
         #expect(fallbackShadow.morningProbabilityPercent != modelShadow.morningProbabilityPercent)
     }
 
+    @Test func coreMLInsightBundleUsesShadowProbabilityWhenReady() {
+        let service = SessionInsightService()
+
+        let assessment = EveningInsightAssessment(
+            morningRisk: .medium,
+            memoryRisk: .low,
+            morningProbabilityPercent: 40,
+            memoryProbabilityPercent: 30,
+            confidence: InsightConfidence(level: .medium, scorePercent: 62, reasons: []),
+            morningReasons: [],
+            memoryReasons: [],
+            riskEvents: [],
+            mealImpact: "meal",
+            waterBalance: WaterBalanceSnapshot(
+                consumedMl: 300,
+                targetMl: 700,
+                deficitMl: 400,
+                status: .mildDeficit,
+                unknownMarksCount: 0,
+                suggestedTopUpMl: 200
+            ),
+            actionsNow: []
+        )
+        let shadow = ShadowRiskAssessment(
+            status: .ready,
+            morningProbabilityPercent: 73,
+            memoryProbabilityPercent: 48,
+            confidencePercent: 88,
+            note: "shadow"
+        )
+        let patterns = PersonalizedPatternAssessment(
+            peakRiskThreshold: 0.12,
+            memoryRiskThreshold: 0.16,
+            paceRiskThreshold: 1.5,
+            hydrationGoalProgress: 0.8,
+            peakTrend: .stable,
+            hydrationTrend: .stable,
+            wellbeingTrend: nil,
+            waterStreak: 1,
+            mealStreak: 1,
+            notes: [L10n.tr("Текущая сессия пока в пределах ваших обычных паттернов.")],
+            actions: []
+        )
+        let recovery = RecoveryIndexSnapshot(
+            score: 55,
+            level: .medium,
+            headline: L10n.tr("потенциал восстановления средний"),
+            reasons: []
+        )
+
+        let bundle = service.makeCoreMLInsightBundle(
+            assessment: assessment,
+            shadow: shadow,
+            patterns: patterns,
+            recovery: recovery
+        )
+
+        #expect(bundle.overloadRisk.message == L10n.format("Вероятность более тяжелого утра сейчас около %d%%.", 73))
+        #expect(bundle.overloadRisk.confidencePercent == 88)
+        #expect(bundle.recommendation.message == L10n.tr("Сделайте паузу 30-40 минут и добавьте воду 300-500 мл."))
+    }
+
     @Test func personalTrendsDetectObservedAssociations() {
         let service = SessionInsightService()
         let now = Date.now

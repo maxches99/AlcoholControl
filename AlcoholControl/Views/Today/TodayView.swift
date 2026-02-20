@@ -101,6 +101,29 @@ private struct SessionLimitState {
     }
 }
 
+private struct DashboardWeekBar: Identifiable {
+    let id = UUID()
+    let day: String
+    let ratio: Double
+}
+
+private struct DashboardActivityItem: Identifiable {
+    let id: UUID
+    let date: Date
+    let icon: String
+    let title: String
+    let subtitle: String
+    let value: String
+}
+
+private struct DashboardQuickActionItem: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    let action: () -> Void
+}
+
 struct TodayView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
@@ -109,6 +132,7 @@ struct TodayView: View {
 
     @Query(sort: [SortDescriptor<Session>(\.startAt, order: .reverse)]) private var sessions: [Session]
     @Query(sort: [SortDescriptor<DrinkEntry>(\.createdAt, order: .reverse)]) private var allDrinks: [DrinkEntry]
+    @Query(sort: [SortDescriptor<WaterEntry>(\.createdAt, order: .reverse)]) private var allWaters: [WaterEntry]
     @Query private var profiles: [UserProfile]
     @Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)]) private var healthSnapshots: [HealthDailySnapshot]
     @Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)]) private var riskModelRuns: [RiskModelRun]
@@ -161,6 +185,7 @@ struct TodayView: View {
     init() {
         _sessions = Query(sort: [SortDescriptor<Session>(\.startAt, order: .reverse)])
         _allDrinks = Query(sort: [SortDescriptor<DrinkEntry>(\.createdAt, order: .reverse)])
+        _allWaters = Query(sort: [SortDescriptor<WaterEntry>(\.createdAt, order: .reverse)])
         _profiles = Query()
         _healthSnapshots = Query(sort: [SortDescriptor<HealthDailySnapshot>(\.day, order: .reverse)])
         _riskModelRuns = Query(sort: [SortDescriptor<RiskModelRun>(\.updatedAt, order: .reverse)])
@@ -173,6 +198,10 @@ struct TodayView: View {
 
     private var latestSessionWithoutCheckIn: Session? {
         sessions.first(where: { !$0.isActive && $0.morningCheckIn == nil })
+    }
+
+    private var latestSessionForCheckIn: Session? {
+        sessions.first(where: isCheckInAvailable(for:))
     }
 
     private var profile: UserProfile? {
@@ -241,7 +270,9 @@ struct TodayView: View {
                     emptyState
                 }
             }
-            .navigationTitle("Сегодня")
+            .background(AppDesign.Colors.background)
+            .tint(AppDesign.Colors.primary)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -252,7 +283,7 @@ struct TodayView: View {
                     } label: {
                         Image(systemName: "questionmark.circle")
                     }
-                    .accessibilityLabel("Подсказки по терминам")
+                        .accessibilityLabel(L10n.tr("Подсказки по терминам"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -264,10 +295,10 @@ struct TodayView: View {
                 }
                 if let session = activeSession {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Завершить") {
+                        Button(L10n.tr("Завершить")) {
                             activeSheet = .endSession(session.id)
                         }
-                        .accessibilityLabel("Завершить сессию")
+                        .accessibilityLabel(L10n.tr("Завершить сессию"))
                     }
                 }
             }
@@ -345,14 +376,14 @@ struct TodayView: View {
                     }
                 }
             }
-            .alert("Экстренная помощь", isPresented: $showEmergencyConfirm) {
-                Button("Позвонить 112") {
+            .alert(L10n.tr("Экстренная помощь"), isPresented: $showEmergencyConfirm) {
+                Button(L10n.tr("Позвонить 112")) {
                     guard let url = URL(string: "tel://112") else { return }
                     openURL(url)
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(L10n.tr("Отмена"), role: .cancel) {}
             } message: {
-                Text("Если состояние резко ухудшается, вызовите экстренную помощь.")
+                Text(L10n.tr("Если состояние резко ухудшается, вызовите экстренную помощь."))
             }
             .onAppear {
                 presentPendingRouteIfNeeded()
@@ -412,7 +443,6 @@ struct TodayView: View {
             history: sessions
         )
         let recoveryIndex = insightService.recoveryIndex(session: session, assessment: insights, health: healthContext, baselines: baselines)
-        let patterns = insightService.personalizedPatterns(current: session, history: sessions, profile: profile)
         let personalTrends = personalTrendsEnabled
             ? insightService.personalTrends(
                 sessions: sessions,
@@ -425,8 +455,6 @@ struct TodayView: View {
                 findings: [],
                 note: L10n.tr("Персональные паттерны выключены в настройках.")
             )
-        let scenarios = insightService.eveningScenarios(for: session, profile: profile, history: sessions)
-        let projections = insightService.memoryProjections(for: session, profile: profile, history: sessions)
         let shadowAssessment = shadowRiskModeEnabled
             ? insightService.assessShadow(
                 session: session,
@@ -436,135 +464,17 @@ struct TodayView: View {
                 baseline: insights
             )
             : nil
-        let completedHistoryCount = sessions.filter { !$0.isActive && $0.id != session.id }.count
-        let shouldShowShadowBlock = (shadowAssessment?.status == .ready) &&
-            completedHistoryCount >= shadowRolloutMinHistory &&
-            (shadowAssessment?.confidencePercent ?? 0) >= shadowRolloutMinConfidence
-        let shouldShowPersonalTrends = personalTrendsEnabled &&
-            personalTrends.status == .ready &&
-            !personalTrends.findings.isEmpty &&
-            completedHistoryCount >= personalTrendsMinHistory &&
-            (personalTrends.findings.first?.confidencePercent ?? 0) >= personalTrendsMinConfidence
-        let standardDrinks = standardDrinksInSession(session)
-        let consumedWaterMl = session.waters.compactMap(\.volumeMl).reduce(0, +)
-        let limitState = sessionLimitState(standardDrinks: standardDrinks)
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let infoMessage {
-                    infoMessageView(infoMessage)
-                }
-                if shouldSuggestSessionFinish(session) {
-                    autoFinishSuggestionCard(session)
-                }
-                sessionOverviewCard(
-                    currentBAC: timeline?.currentBAC ?? 0,
-                    soberAt: timeline?.estimatedSoberAt,
-                    confidence: insights.confidence,
-                    memoryRisk: insights.memoryRisk,
-                    memoryRiskPercent: insights.memoryProbabilityPercent,
-                    recoveryIndex: recoveryIndex
-                )
-                hydrationSummaryCard(insights.waterBalance)
-                goalsProgressCard(
-                    session: session,
-                    standardDrinks: standardDrinks,
-                    consumedWaterMl: consumedWaterMl
-                )
-                sessionLimitCard(limitState)
-                oneTapDrinkCard(session: session)
-                eveningProcessCoachCard(
-                    session: session,
-                    insights: insights,
-                    patterns: patterns,
-                    standardDrinks: standardDrinks
-                )
-                if shouldShowPersonalTrends {
-                    PersonalTrendsCard(summary: personalTrends)
-                }
-
-                EveningInsightsCard(
-                    insights: insights,
-                    shadowAssessment: shouldShowShadowBlock ? shadowAssessment : nil,
-                    recoveryIndex: recoveryIndex,
-                    patterns: patterns,
-                    scenarios: scenarios,
-                    projections: projections,
-                    onOpenGlossary: {
-                        activeTermHint = nil
-                        showGlossaryTooltip = true
-                    },
-                    onOpenForecast: {
-                        activeSheet = .forecast(session.id)
-                    }
-                )
-
-                if let bac = timeline?.currentBAC, bac >= 0.16 {
-                    safetyBanner
-                }
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    actionButton(title: L10n.tr("+ Напиток"), icon: "wineglass.fill", tint: .orange) {
-                        activeSheet = .addDrink(session.id)
-                    }
-                    .accessibilityLabel("Добавить напиток")
-
-                    actionButton(title: L10n.tr("+ Еда"), icon: "fork.knife", tint: .brown) {
-                        activeSheet = .addMeal(session.id)
-                    }
-                    .accessibilityLabel("Добавить прием пищи")
-
-                    actionButton(title: L10n.tr("+ Вода"), icon: "drop.fill", tint: .blue) {
-                        activeSheet = .addWater(session.id)
-                    }
-                    .accessibilityLabel("Добавить воду")
-                    actionButton(title: L10n.tr("Напоминания"), icon: "bell", tint: .indigo) {
-                        activeSheet = .waterReminders
-                    }
-                    .accessibilityLabel("Открыть настройки напоминаний")
-
-                    actionButton(title: "Share Card", icon: "square.and.arrow.up", tint: .teal) {
-                        activeSheet = .share(session.id)
-                    }
-                    .accessibilityLabel("Поделиться карточкой")
-
-                    actionButton(title: L10n.tr("Повторить последний"), icon: "arrow.clockwise", tint: .pink) {
-                        repeatLastDrink(into: session)
-                    }
-                    .accessibilityLabel("Повторить последний напиток")
-
-                    if liveActivityEnabled {
-                        actionButton(title: "Live Activity", icon: "dot.radiowaves.left.and.right", tint: .green) {
-                            Task {
-                                let result = await LiveSessionActivityService.shared.upsert(
-                                    sessionID: session.id,
-                                    currentBAC: timeline?.currentBAC ?? 0,
-                                    soberAt: timeline?.estimatedSoberAt
-                                )
-                                infoMessage = result.userMessage
-                            }
-                        }
-                        .accessibilityLabel("Запустить Live Activity")
-                    }
-                }
-
-                TimelineSection(
-                    session: session,
-                    onDeleteDrink: { drink in
-                        sessionService.delete(entry: drink, from: session, context: context, profile: profile)
-                    },
-                    onDeleteMeal: { meal in
-                        sessionService.delete(entry: meal, from: session, context: context, profile: profile)
-                    },
-                    onDeleteWater: { water in
-                        sessionService.delete(entry: water, from: session, context: context, profile: profile)
-                    }
-                )
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-        }
+        dashboardContent(
+            activeSession: session,
+            currentBAC: timeline?.currentBAC ?? 0,
+            soberAt: timeline?.estimatedSoberAt,
+            hydrationConsumedMl: insights.waterBalance.consumedMl,
+            hydrationTargetMl: insights.waterBalance.targetMl,
+            memoryRisk: insights.memoryRisk,
+            recoveryScore: recoveryIndex.score,
+            morningRisk: insights.morningRisk,
+            topReason: insights.morningReasons.first
+        )
         .task(
             id: liveActivityTaskID(
                 session: session,
@@ -622,60 +532,748 @@ struct TodayView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
-            if let infoMessage {
-                infoMessageView(infoMessage)
-                    .padding(.horizontal)
-            }
-
-            if preSessionPlanEnabled {
-                preSessionPlanCard
-                    .padding(.horizontal)
-            }
-
-            Text("Сессия не активна")
-                .font(.title3)
-            Text("Начните вечер, чтобы логировать напитки, воду и видеть динамику BAC.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            Button("Начать вечер") {
-                startSessionWithPlanContext()
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityLabel("Начать вечер")
-
-            if let pending = latestSessionWithoutCheckIn {
-                Button("Утренний чек-ин") {
-                    activeSheet = .checkIn(pending.id)
-                }
-                .buttonStyle(.bordered)
-            }
-
-            if !recentPresets.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Недавние напитки")
-                        .font(.headline)
-                    ForEach(recentPresets.prefix(3)) { preset in
-                        HStack {
-                            Text(preset.title.localized)
-                            Spacer()
-                            Text(L10n.format("%d мл @ %d%%", Int(preset.volumeMl), Int(preset.abv)))
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.footnote)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        dashboardContent(
+            activeSession: nil,
+            currentBAC: 0,
+            soberAt: nil,
+            hydrationConsumedMl: 0,
+            hydrationTargetMl: Int(goalWaterMl),
+            memoryRisk: .low,
+            recoveryScore: 0,
+            morningRisk: .low
+        )
         .task {
             await LiveSessionActivityService.shared.endAll()
             WidgetSnapshotStore.clear()
         }
+    }
+
+    private func dashboardContent(
+        activeSession: Session?,
+        currentBAC: Double,
+        soberAt: Date?,
+        hydrationConsumedMl: Int,
+        hydrationTargetMl: Int,
+        memoryRisk: InsightLevel,
+        recoveryScore: Int,
+        morningRisk: InsightLevel,
+        topReason: String? = nil
+    ) -> some View {
+        GeometryReader { proxy in
+            ScrollView {
+                let quickActions = dashboardQuickActions(activeSession: activeSession)
+                VStack(alignment: .leading, spacing: 16) {
+                    if let infoMessage {
+                        infoMessageView(infoMessage)
+                    }
+
+                    dashboardHeader
+                    dashboardSectionTitle(L10n.tr("Быстрые действия"))
+                    LazyVGrid(columns: quickActionColumns(for: quickActions.count), spacing: 12) {
+                        ForEach(quickActions) { item in
+                            dashboardQuickActionCard(
+                                title: item.title,
+                                subtitle: item.subtitle,
+                                icon: item.icon,
+                                action: item.action
+                            )
+                        }
+                    }
+                    if shouldShowCheckInPromptCard(activeSession: activeSession) {
+                        checkInPromptCard(activeSession: activeSession)
+                    }
+
+                    dashboardSectionTitle(L10n.tr("Текущий статус"))
+                    HStack(spacing: 12) {
+                        dashboardStatusCard(
+                            title: L10n.tr("Гидратация"),
+                            value: L10n.format("%d / %d мл", hydrationConsumedMl, max(hydrationTargetMl, 1)),
+                            icon: "drop.fill",
+                            tint: Color(red: 0.47, green: 0.60, blue: 0.72)
+                        )
+                        dashboardStatusCard(
+                            title: L10n.tr("Последний напиток"),
+                            value: relativeTimeText(for: activeSession?.drinks.map(\.createdAt).max() ?? allDrinks.first?.createdAt),
+                            icon: "clock",
+                            tint: AppDesign.Colors.primary
+                        )
+                    }
+
+                    if let activeSession {
+                        dashboardSessionForecastCard(
+                            session: activeSession,
+                            currentBAC: currentBAC,
+                            soberAt: soberAt,
+                            morningRisk: morningRisk,
+                            memoryRisk: memoryRisk,
+                            topReason: topReason
+                        )
+                    }
+
+                    dashboardAnalyticsCard
+
+                    dashboardSectionTitle(
+                        L10n.tr("Последняя активность"),
+                        trailing: L10n.tr("Все")
+                    ) {
+                        appState.selectedTab = .history
+                    }
+                    if recentActivityItems.isEmpty {
+                        dashboardEmptyActivityCard
+                    } else {
+                        ForEach(recentActivityItems) { item in
+                            dashboardActivityRow(item)
+                        }
+                    }
+
+                    dashboardTipCard
+                    recoveryPill(
+                        score: recoveryScore,
+                        risk: morningRisk,
+                        memoryRisk: memoryRisk,
+                        bac: currentBAC,
+                        soberAt: soberAt
+                    )
+                }
+                .frame(width: max(0, proxy.size.width - 32), alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
+            }
+        }
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.06, green: 0.08, blue: 0.08),
+                    Color(red: 0.07, green: 0.10, blue: 0.09),
+                    Color(red: 0.08, green: 0.10, blue: 0.09)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
+    }
+
+    private var dashboardHeader: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(greetingText)
+                    .font(.system(.title, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.94))
+                Text(L10n.tr("Оставайтесь внимательны и поддерживайте гидратацию сегодня."))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.white.opacity(0.62))
+            }
+            Spacer()
+            Circle()
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    Image(systemName: "moon.stars")
+                        .foregroundStyle(Color.white.opacity(0.72))
+                )
+                .frame(width: 56, height: 56)
+        }
+    }
+
+    private func checkInPromptCard(activeSession: Session?) -> some View {
+        let buttonText: String
+        if activeSession != nil {
+            buttonText = L10n.tr("Открыть прогноз")
+        } else if latestSessionForCheckIn != nil {
+            buttonText = L10n.tr("Пройти чек-ин")
+        } else {
+            buttonText = L10n.tr("Начать сессию")
+        }
+
+        return HStack(spacing: 14) {
+            Circle()
+                .fill(Color.white.opacity(0.7))
+                .frame(width: 68, height: 68)
+                .overlay(
+                    Image(systemName: "figure.mind.and.body")
+                        .font(.title3)
+                        .foregroundStyle(AppDesign.Colors.primary.opacity(0.75))
+                )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.tr("Как вы себя чувствуете?"))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.black.opacity(0.62))
+                Text(L10n.tr("Утренний и дневной check-in после сессии помогает видеть долгосрочные тренды самочувствия."))
+                    .font(.subheadline)
+                    .foregroundStyle(Color.black.opacity(0.46))
+                    .lineLimit(2)
+
+                Button(buttonText) {
+                    if let activeSession {
+                        activeSheet = .forecast(activeSession.id)
+                    } else if let pending = latestSessionForCheckIn {
+                        activeSheet = .checkIn(pending.id)
+                    } else {
+                        startSessionWithPlanContext()
+                    }
+                }
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(AppDesign.Colors.primary.opacity(0.72))
+                )
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 164, alignment: .leading)
+        .background(Color(red: 0.84, green: 0.80, blue: 0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func dashboardSectionTitle(_ title: String, trailing: String? = nil, action: (() -> Void)? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.9))
+            Spacer()
+            if let trailing {
+                Button(trailing) {
+                    action?()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.white.opacity(0.62))
+            }
+        }
+    }
+
+    private func dashboardStatusCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint.opacity(0.85))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.62))
+                    .lineLimit(1)
+                Text(value)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 84, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func dashboardQuickActionCard(title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .center, spacing: 10) {
+                Circle()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width: 62, height: 62)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundStyle(AppDesign.Colors.primary.opacity(0.85))
+                    )
+                Text(title)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.88))
+                Text(subtitle)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.46))
+            }
+            .frame(maxWidth: .infinity, minHeight: 142)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dashboardQuickActions(activeSession: Session?) -> [DashboardQuickActionItem] {
+        if let activeSession {
+            return [
+                DashboardQuickActionItem(
+                    id: "add-drink",
+                    title: L10n.tr("Лог напитка"),
+                    subtitle: L10n.tr("Добавить сейчас"),
+                    icon: "plus",
+                    action: {
+                        activeSheet = .addDrink(activeSession.id)
+                    }
+                ),
+                DashboardQuickActionItem(
+                    id: "add-water",
+                    title: L10n.tr("Гидратация"),
+                    subtitle: L10n.tr("+250 мл воды"),
+                    icon: "drop",
+                    action: {
+                        sessionService.addWater(
+                            to: activeSession,
+                            context: context,
+                            profile: profile,
+                            volumeMl: 250
+                        )
+                        infoMessage = L10n.tr("Добавлено: +250 мл воды")
+                    }
+                )
+            ]
+        }
+
+        return [
+            DashboardQuickActionItem(
+                id: "start-session",
+                title: L10n.tr("Начать сессию"),
+                subtitle: L10n.tr("Явно запустить трекинг"),
+                icon: "play.fill",
+                action: {
+                    startSessionWithPlanContext()
+                }
+            )
+        ]
+    }
+
+    private func quickActionColumns(for count: Int) -> [GridItem] {
+        let columnsCount = count == 1 ? 1 : 2
+        return Array(repeating: GridItem(.flexible()), count: columnsCount)
+    }
+
+    private func dashboardSessionForecastCard(
+        session: Session,
+        currentBAC: Double,
+        soberAt: Date?,
+        morningRisk: InsightLevel,
+        memoryRisk: InsightLevel,
+        topReason: String?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(L10n.tr("Прогноз по текущей сессии"))
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                Spacer()
+                Button(L10n.tr("Подробнее")) {
+                    activeSheet = .forecast(session.id)
+                }
+                .buttonStyle(.plain)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.62))
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                forecastCompactBlock(
+                    icon: "waveform.path.ecg",
+                    title: L10n.tr("Сейчас"),
+                    headline: currentStateHeadline(bac: currentBAC, risk: morningRisk),
+                    caption: currentStateCaption(bac: currentBAC, risk: morningRisk),
+                    accent: levelColor(morningRisk)
+                )
+                forecastCompactBlock(
+                    icon: "sun.max",
+                    title: L10n.tr("К утру"),
+                    headline: morningStateHeadline(morningRisk: morningRisk),
+                    caption: morningStateCaption(morningRisk: morningRisk, memoryRisk: memoryRisk),
+                    accent: levelColor(morningRisk)
+                )
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                    .foregroundStyle(Color.white.opacity(0.55))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("Когда станет легче"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.68))
+                    Text(easingWindowText(for: soberAt))
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.84))
+                        .lineLimit(2)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+
+            Text(L10n.tr("Прогноз на основе ваших прошлых сессий и текущей динамики."))
+                .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.56))
+
+            if let topReason, !topReason.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "lightbulb")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.5))
+                    Text(topReason)
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.56))
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func forecastCompactBlock(
+        icon: String,
+        title: String,
+        headline: String,
+        caption: String,
+        accent: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(accent.opacity(0.92))
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.66))
+            }
+            Text(headline)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .lineLimit(1)
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.56))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    private func currentStateHeadline(bac: Double, risk: InsightLevel) -> String {
+        if bac >= 0.12 || risk == .high {
+            return L10n.tr("Нагрузка повышена")
+        }
+        if bac >= 0.06 || risk == .medium {
+            return L10n.tr("Умеренная нагрузка")
+        }
+        return L10n.tr("Состояние стабильно")
+    }
+
+    private func currentStateCaption(bac: Double, risk: InsightLevel) -> String {
+        if bac >= 0.12 || risk == .high {
+            return L10n.tr("Нагрузка уже заметная: лучше сделать паузу, перейти на воду и не ускорять темп в ближайший час.")
+        }
+        if bac >= 0.06 || risk == .medium {
+            return L10n.tr("Состояние пока управляемое, но чувствительное к темпу: короткие паузы и вода обычно заметно улучшают прогноз.")
+        }
+        return L10n.tr("Сейчас динамика спокойная. Сохраните текущий ритм и поддерживайте гидратацию, чтобы не поднять нагрузку к утру.")
+    }
+
+    private func morningStateHeadline(morningRisk: InsightLevel) -> String {
+        switch morningRisk {
+        case .high:
+            return L10n.tr("Может быть тяжело")
+        case .medium:
+            return L10n.tr("Скорее средне")
+        case .low:
+            return L10n.tr("Скорее легко")
+        }
+    }
+
+    private func morningStateCaption(morningRisk: InsightLevel, memoryRisk: InsightLevel) -> String {
+        switch (morningRisk, memoryRisk) {
+        case (.high, _):
+            return L10n.tr("По текущей динамике утро может быть тяжелым. Лучше заранее убрать ранние нагрузки и оставить время на восстановление.")
+        case (.medium, .high):
+            return L10n.tr("Самочувствие, скорее всего, будет средним, но часть эпизодов может вспоминаться фрагментами. Спокойный режим утром поможет выровняться.")
+        case (.medium, _):
+            return L10n.tr("Вероятно среднее состояние утром. Обычно становится легче в первой половине дня, особенно при воде и спокойном темпе.")
+        case (.low, .high):
+            return L10n.tr("По самочувствию утро должно пройти легче, но память может восстановиться не полностью. Лучше не перегружать первые часы дня.")
+        case (.low, .medium):
+            return L10n.tr("Утро, скорее всего, пройдет легче, хотя возможна небольшая фрагментарность воспоминаний. Мягкий старт дня обычно сглаживает это.")
+        case (.low, .low):
+            return L10n.tr("По текущим данным утро должно пройти относительно легко. Держите обычный спокойный режим, и состояние обычно стабилизируется быстро.")
+        }
+    }
+
+    private func easingWindowText(for soberAt: Date?) -> String {
+        guard let soberAt else {
+            return L10n.tr("Уже близко к 0.00")
+        }
+
+        let minutesToSober = max(0, Int(soberAt.timeIntervalSinceNow / 60))
+        if minutesToSober == 0 {
+            return L10n.tr("Уже близко к 0.00")
+        }
+
+        let minutesToRelief = max(20, Int((Double(minutesToSober) * 0.45).rounded()))
+        return L10n.format(
+            "Легче примерно через %@ • до трезвого состояния по оценке через %@",
+            durationText(minutes: minutesToRelief),
+            durationText(minutes: minutesToSober)
+        )
+    }
+
+    private func durationText(minutes: Int) -> String {
+        let hours = minutes / 60
+        let restMinutes = minutes % 60
+        if hours > 0 {
+            return L10n.format("%d ч %d м", hours, restMinutes)
+        }
+        return L10n.format("%d м", restMinutes)
+    }
+
+    private func shouldShowCheckInPromptCard(activeSession: Session?) -> Bool {
+        activeSession == nil && latestSessionForCheckIn != nil
+    }
+
+    private var dashboardAnalyticsCard: some View {
+        let bars = weeklyBars
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("Недельная аналитика безопасности"))
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                    Text(L10n.tr("Условные единицы в день"))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.48))
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
+
+            HStack(alignment: .bottom, spacing: 18) {
+                ForEach(bars) { bar in
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(red: 0.82, green: 0.63, blue: 0.65))
+                            .frame(width: 18, height: max(8, CGFloat(bar.ratio) * 102))
+                        Text(bar.day)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(Color.white.opacity(0.48))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 124, alignment: .bottom)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func dashboardActivityRow(_ item: DashboardActivityItem) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.28))
+                .frame(width: 64, height: 64)
+                .overlay(
+                    Image(systemName: item.icon)
+                        .font(.title3)
+                        .foregroundStyle(Color.white.opacity(0.6))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.86))
+                    .lineLimit(1)
+                Text(item.subtitle)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.white.opacity(0.56))
+                    .lineLimit(1)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(item.value)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.58))
+                Text(L10n.tr("ед."))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.23))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                )
+        )
+    }
+
+    private var dashboardEmptyActivityCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.badge.questionmark")
+                .foregroundStyle(Color.white.opacity(0.5))
+            Text(L10n.tr("Пока нет недавних записей для отображения."))
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.6))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    private var dashboardTipCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb")
+                .foregroundStyle(Color(red: 0.78, green: 0.56, blue: 0.58))
+            Text(L10n.tr("Совет: чередуйте напитки с водой, чтобы поддерживать стабильную гидратацию."))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.72))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.1))
+        )
+    }
+
+    private func recoveryPill(score: Int, risk: InsightLevel, memoryRisk: InsightLevel, bac: Double, soberAt: Date?) -> some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 10) {
+                Text(L10n.format("%d", max(0, score)))
+                    .font(.system(.headline, design: .rounded).weight(.heavy))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                Text(L10n.tr("шаги восстановления"))
+                    .font(.headline.weight(.medium))
+                    .foregroundStyle(Color.white.opacity(0.88))
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(red: 0.79, green: 0.62, blue: 0.64))
+            )
+
+            Text(L10n.format("%@ • %@ • BAC %.3f • %@", risk.title.capitalized, memoryRisk.title.capitalized, bac, soberText(for: soberAt).replacingOccurrences(of: "До ~0.00: ", with: "")))
+                .font(.caption)
+                .foregroundStyle(Color.white.opacity(0.58))
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var greetingText: String {
+        let hour = Calendar.current.component(.hour, from: .now)
+        if hour < 5 { return L10n.tr("Доброй ночи") }
+        if hour < 12 { return L10n.tr("Доброе утро") }
+        if hour < 18 { return L10n.tr("Добрый день") }
+        if hour < 23 { return L10n.tr("Добрый вечер") }
+        return L10n.tr("Доброй ночи")
+    }
+
+    private var weeklyBars: [DashboardWeekBar] {
+        let calendar = Calendar.current
+        var result: [DashboardWeekBar] = []
+        let maxValue: Double = {
+            let values = weekDayStandardDrinkMap.values
+            return max(values.max() ?? 0, 1)
+        }()
+
+        for offset in stride(from: 6, through: 0, by: -1) {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: .now) else { continue }
+            let start = calendar.startOfDay(for: day)
+            let value = weekDayStandardDrinkMap[start] ?? 0
+            let dayLabel = day.formatted(.dateTime.weekday(.narrow))
+            result.append(
+                DashboardWeekBar(
+                    day: dayLabel.uppercased(),
+                    ratio: min(1, value / maxValue)
+                )
+            )
+        }
+        return result
+    }
+
+    private var weekDayStandardDrinkMap: [Date: Double] {
+        let calendar = Calendar.current
+        var map: [Date: Double] = [:]
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: .now)) ?? .now
+
+        for session in sessions where session.startAt >= weekStart {
+            let day = calendar.startOfDay(for: session.startAt)
+            let consumed = standardDrinksInSession(session)
+            map[day, default: 0] += consumed
+        }
+        return map
+    }
+
+    private var recentActivityItems: [DashboardActivityItem] {
+        let drinks = allDrinks.prefix(8).map { drink in
+            DashboardActivityItem(
+                id: drink.id,
+                date: drink.createdAt,
+                icon: "wineglass",
+                title: (drink.title ?? drink.category.label).localized,
+                subtitle: drink.createdAt.formatted(date: .omitted, time: .shortened),
+                value: String(format: "%.1f", (drink.volumeMl * (drink.abvPercent / 100) * 0.789) / 14)
+            )
+        }
+        let waters = allWaters.prefix(8).map { water in
+            DashboardActivityItem(
+                id: water.id,
+                date: water.createdAt,
+                icon: "drop",
+                title: L10n.tr("Вода"),
+                subtitle: water.createdAt.formatted(date: .omitted, time: .shortened),
+                value: String(format: "%.1f", (water.volumeMl ?? 0) / 250)
+            )
+        }
+        return (drinks + waters)
+            .sorted(by: { $0.date > $1.date })
+            .prefix(3)
+            .map { $0 }
+    }
+
+    private func relativeTimeText(for date: Date?) -> String {
+        guard let date else { return L10n.tr("Нет данных") }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: .now)
     }
 
     private var preSessionPlanCard: some View {
@@ -1138,13 +1736,19 @@ struct TodayView: View {
     }
 
     private func infoMessageView(_ message: String) -> some View {
-        Text(message)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.blue.opacity(0.10))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(Color.white.opacity(0.58))
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(Color.white.opacity(0.72))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
     }
 
     private func actionButton(title: String, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
@@ -1584,10 +2188,10 @@ struct TodayView: View {
 
     private func presentPendingRouteIfNeeded() {
         if appState.pendingOpenLatestMorningCheckIn {
-            if let session = latestSessionWithoutCheckIn {
+            if let session = latestSessionForCheckIn {
                 activeSheet = .checkIn(session.id)
             } else {
-                infoMessage = L10n.tr("Нет доступного чек-ина для последней сессии")
+                infoMessage = L10n.tr("Check-in доступен утром и днем после завершенной сессии")
             }
             appState.pendingOpenLatestMorningCheckIn = false
             return
@@ -1595,15 +2199,21 @@ struct TodayView: View {
 
         if let sessionID = appState.pendingMorningCheckInSessionID,
            let session = sessionByID(sessionID),
-           session.morningCheckIn == nil {
+           isCheckInAvailable(for: session) {
             activeSheet = .checkIn(sessionID)
             return
         }
 
         if appState.pendingMorningCheckInSessionID != nil {
             appState.pendingMorningCheckInSessionID = nil
-            infoMessage = L10n.tr("Чек-ин уже заполнен или сессия не найдена")
+            infoMessage = L10n.tr("Check-in доступен утром и днем, если сессия уже завершена")
         }
+    }
+
+    private func isCheckInAvailable(for session: Session) -> Bool {
+        guard !session.isActive, session.morningCheckIn == nil else { return false }
+        let hour = Calendar.current.component(.hour, from: .now)
+        return hour >= 6 && hour < 18
     }
 }
 

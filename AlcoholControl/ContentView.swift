@@ -29,24 +29,25 @@ struct MainTabs: View {
             TodayView()
                 .tag(AppTab.today)
                 .tabItem {
-                    Label("Сегодня", systemImage: "sun.max")
+                    Label(L10n.tr("Сегодня"), systemImage: "sun.max")
                 }
             HistoryView()
                 .tag(AppTab.history)
                 .tabItem {
-                    Label("История", systemImage: "clock")
+                    Label(L10n.tr("История"), systemImage: "clock")
                 }
             AnalyticsView()
                 .tag(AppTab.analytics)
                 .tabItem {
-                    Label("Аналитика", systemImage: "chart.bar")
+                    Label(L10n.tr("Аналитика"), systemImage: "chart.bar")
                 }
             SettingsView()
                 .tag(AppTab.settings)
                 .tabItem {
-                    Label("Настройки", systemImage: "gearshape")
+                    Label(L10n.tr("Настройки"), systemImage: "gearshape")
                 }
         }
+        .tint(AppDesign.Colors.primary)
     }
 }
 

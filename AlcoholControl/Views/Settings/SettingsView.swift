@@ -161,304 +161,483 @@ struct SettingsView: View {
         return lines.joined(separator: " · ")
     }
 
+    @ViewBuilder
+    private func settingsSectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.86))
+                .textCase(nil)
+            Spacer()
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section(L10n.tr("Профиль")) {
-                    Picker(L10n.tr("Единицы"), selection: $unitSystem) {
-                        Text(L10n.tr("Метрические")).tag(UserProfile.UnitSystem.metric)
-                        Text(L10n.tr("Имперские")).tag(UserProfile.UnitSystem.imperial)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.tr("Настройки"))
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.white.opacity(0.96))
+                        Text(L10n.tr("Настройте приложение под свои цели и ритм."))
+                            .font(.title3.weight(.medium))
+                            .foregroundStyle(Color.white.opacity(0.56))
                     }
 
-                    Stepper(value: $weight, in: unitSystem.weightRange, step: 1) {
-                        HStack {
-                            Text(L10n.tr("Вес"))
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        HStack(spacing: 14) {
+                            Circle()
+                                .fill(Color.white.opacity(0.7))
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "sparkles")
+                                        .font(.title3)
+                                        .foregroundStyle(Color(red: 0.73, green: 0.56, blue: 0.58))
+                                )
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(purchase.isPremium ? L10n.tr("Premium активен") : L10n.tr("Открыть Premium"))
+                                    .font(.system(.title3, design: .rounded).weight(.bold))
+                                    .foregroundStyle(Color.black.opacity(0.62))
+                                Text(purchase.isPremium ? L10n.tr("Управляйте подпиской и восстановлением покупок.") : L10n.tr("Расширенная аналитика и персональные инсайты."))
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(Color.black.opacity(0.46))
+                                    .multilineTextAlignment(.leading)
+                            }
                             Spacer()
-                            Text(String(format: "%.0f %@", weight, unitSystem == .metric ? "кг" : "lbs"))
+                            Image(systemName: "chevron.right")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(Color.black.opacity(0.44))
                         }
-                    }
-
-                    Picker(L10n.tr("Пол (опционально)"), selection: $sex) {
-                        ForEach(UserProfile.BiologicalSex.allCases) { value in
-                            Text(value.label).tag(value)
-                        }
-                    }
-                }
-
-                Section(L10n.tr("Язык")) {
-                    Picker(L10n.tr("Язык приложения"), selection: $selectedAppLanguage) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(language.title).tag(language.rawValue)
-                        }
-                    }
-                }
-
-                Section(L10n.tr("Уведомления")) {
-                    NavigationLink(L10n.tr("Настройки уведомлений")) {
-                        NotificationsSettingsView()
-                    }
-                }
-
-                Section(L10n.tr("Цели вечера")) {
-                    Toggle(L10n.tr("Pre-session plan"), isOn: $preSessionPlanEnabled)
-
-                    Stepper(value: $goalStdDrinks, in: 1...12, step: 0.5) {
-                        HStack {
-                            Text(L10n.tr("Лимит алкоголя"))
-                            Spacer()
-                            Text(String(format: "%.1f ст.др.", goalStdDrinks))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Stepper(value: $goalWaterMl, in: 400...3000, step: 100) {
-                        HStack {
-                            Text(L10n.tr("Цель воды"))
-                            Spacer()
-                            Text("\(Int(goalWaterMl)) мл")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Stepper(value: $goalEndHour, in: 0...23) {
-                        HStack {
-                            Text(L10n.tr("План завершить до"))
-                            Spacer()
-                            Text(String(format: "%02d:00", goalEndHour))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Stepper(value: $autoFinishSuggestionHours, in: 2...12) {
-                        HStack {
-                            Text(L10n.tr("Авто-подсказка завершить через"))
-                            Spacer()
-                            Text("\(autoFinishSuggestionHours) ч")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                Section(L10n.tr("Недельные цели harm-reduction")) {
-                    Stepper(value: $weeklyHeavyMorningLimit, in: 0...7) {
-                        HStack {
-                            Text(L10n.tr("Лимит тяжелых утр"))
-                            Spacer()
-                            Text("\(weeklyHeavyMorningLimit)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Stepper(value: $weeklyHighMemoryRiskLimit, in: 0...7) {
-                        HStack {
-                            Text(L10n.tr("Лимит сессий с высоким риском памяти"))
-                            Spacer()
-                            Text("\(weeklyHighMemoryRiskLimit)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Stepper(value: $weeklyHydrationHitTarget, in: 40...100, step: 5) {
-                        HStack {
-                            Text(L10n.tr("Цель гидратации в неделю"))
-                            Spacer()
-                            Text("\(weeklyHydrationHitTarget)%")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text(L10n.tr("Цели используются в разделе Аналитика для недельного контроля безопасности."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(L10n.tr("Безопасность")) {
-                    Toggle(L10n.tr("Safety mode"), isOn: $safetyModeEnabled)
-                    if safetyModeEnabled {
-                        Text(L10n.tr("Более ранние подсказки риска, акцент на паузы и воду, приоритет действий безопасности."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button(L10n.tr("Открыть центр безопасности")) {
-                        showSafetyCenter = true
-                    }
-
-                    TextField(L10n.tr("Имя доверенного контакта"), text: $trustedContactName)
-                        .textInputAutocapitalization(.words)
-
-                    TextField(L10n.tr("Телефон доверенного контакта"), text: $trustedContactPhone)
-                        .keyboardType(.phonePad)
-
-                    if !trustedContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button(L10n.tr("Проверить звонок контакту")) {
-                            callTrustedContact()
-                        }
-                    }
-                }
-
-                Section(L10n.tr("Интеграции")) {
-                    Toggle(L10n.tr("Live Activity (beta)"), isOn: $liveActivityEnabled)
-                    Toggle(isOn: $syncWaterWithHealth) {
-                        Text(L10n.tr("Синхронизировать воду с Apple Health"))
-                    }
-                    Text(L10n.tr("Когда включено, вода импортируется из Apple Health и новые записи из приложения отправляются обратно в Health."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(waterSyncStatusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Button(connectingHealth ? L10n.tr("Подключаем Apple Health...") : L10n.tr("Подключить Apple Health (сон / вода / шаги / пульс)")) {
-                        Task { await connectHealthKit() }
-                    }
-                    .disabled(connectingHealth)
-                }
-
-                Section(L10n.tr("CoreML shadow")) {
-                    Toggle(L10n.tr("Включить shadow-прогноз"), isOn: $shadowRiskModeEnabled)
-                    Text(L10n.tr("Версия модели: coreml-shadow-v1"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if let latestShadowRun {
-                        Text(L10n.format("Последний успешный инференс: %@", latestShadowRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(L10n.tr("Последний успешный инференс: пока нет данных"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Stepper(value: $shadowRolloutMinHistory, in: 3...20) {
-                        HStack {
-                            Text(L10n.tr("Мин. завершенных сессий"))
-                            Spacer()
-                            Text("\(shadowRolloutMinHistory)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Stepper(value: $shadowRolloutMinConfidence, in: 30...95, step: 5) {
-                        HStack {
-                            Text(L10n.tr("Мин. уверенность для UI"))
-                            Spacer()
-                            Text("\(shadowRolloutMinConfidence)%")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Text(L10n.tr("Shadow отображается только при достаточной истории и confidence-пороге; основной риск это не меняет."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(shadowQualitySummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(L10n.tr("Персональные паттерны")) {
-                    Toggle(L10n.tr("Включить персональные паттерны"), isOn: $personalTrendsEnabled)
-                    Toggle(L10n.tr("Использовать CoreML для паттернов"), isOn: $personalTrendsCoreMLEnabled)
-
-                    if let latestPersonalTrendRun {
-                        Text(L10n.format("Последнее обновление паттернов: %@", latestPersonalTrendRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(L10n.tr("Последнее обновление паттернов: пока нет данных"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Stepper(value: $personalTrendsMinHistory, in: 5...30) {
-                        HStack {
-                            Text(L10n.tr("Мин. завершенных сессий для паттернов"))
-                            Spacer()
-                            Text("\(personalTrendsMinHistory)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Stepper(value: $personalTrendsMinConfidence, in: 30...95, step: 5) {
-                        HStack {
-                            Text(L10n.tr("Мин. уверенность паттерна"))
-                            Spacer()
-                            Text("\(personalTrendsMinConfidence)%")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Text(personalTrendsSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(L10n.tr("Паттерны показывают только наблюдаемые связи в ваших данных и не являются медицинским заключением."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(L10n.tr("Приватность")) {
-                    Toggle(L10n.tr("Скрывать BAC в шаринге"), isOn: $hideBACInSharing)
-                }
-
-                if debugMenuUnlocked {
-                    Section(L10n.tr("Debug меню")) {
-                        Toggle(
-                            L10n.tr("Принудительно включить Premium"),
-                            isOn: Binding(
-                                get: { purchase.debugPremiumOverrideEnabled },
-                                set: { purchase.setDebugPremiumOverride($0) }
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.86, green: 0.82, blue: 0.74),
+                                    Color(red: 0.84, green: 0.67, blue: 0.70)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
                         )
-                        Text(L10n.tr("Используйте только для локальной отладки. Оформление подписки не выполняется."))
+                        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    settingsSectionHeader(L10n.tr("Приватность"))
+                    settingsCard {
+                        settingsRow(
+                            icon: "shield.lefthalf.filled",
+                            title: L10n.tr("Скрывать BAC в шаринге"),
+                            subtitle: L10n.tr("Скрывает BAC в карточках и экспортах")
+                        ) {
+                            Toggle("", isOn: $hideBACInSharing)
+                                .labelsHidden()
+                        }
+                    }
+
+                    settingsSectionHeader(L10n.tr("Профиль"))
+                    settingsCard {
+                        Picker(selection: $unitSystem) {
+                            Text(L10n.tr("Метрические")).tag(UserProfile.UnitSystem.metric)
+                            Text(L10n.tr("Имперские")).tag(UserProfile.UnitSystem.imperial)
+                        } label: {
+                            settingsInlineLabel(icon: "scalemass", title: L10n.tr("Единицы"))
+                        }
+                        .pickerStyle(.menu)
+                        settingsDivider()
+
+                        Stepper(value: $weight, in: unitSystem.weightRange, step: 1) {
+                            settingsInlineLabel(
+                                icon: "figure.stand",
+                                title: L10n.tr("Вес"),
+                                trailing: String(format: "%.0f %@", weight, unitSystem == .metric ? "кг" : "lbs")
+                            )
+                        }
+                        settingsDivider()
+
+                        Picker(selection: $sex) {
+                            ForEach(UserProfile.BiologicalSex.allCases) { value in
+                                Text(value.label).tag(value)
+                            }
+                        } label: {
+                            settingsInlineLabel(icon: "person.text.rectangle", title: L10n.tr("Пол (опционально)"))
+                        }
+                        .pickerStyle(.menu)
+                        settingsDivider()
+
+                        Picker(selection: $selectedAppLanguage) {
+                            ForEach(AppLanguage.allCases) { language in
+                                Text(language.title).tag(language.rawValue)
+                            }
+                        } label: {
+                            settingsInlineLabel(icon: "globe", title: L10n.tr("Язык приложения"))
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    settingsSectionHeader(L10n.tr("Цели вечера"))
+                    settingsCard {
+                        settingsRow(icon: "list.clipboard", title: L10n.tr("Pre-session plan")) {
+                            Toggle("", isOn: $preSessionPlanEnabled)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        Stepper(value: $goalStdDrinks, in: 1...12, step: 0.5) {
+                            settingsInlineLabel(
+                                icon: "wineglass",
+                                title: L10n.tr("Лимит алкоголя"),
+                                trailing: String(format: "%.1f ст.др.", goalStdDrinks)
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $goalWaterMl, in: 400...3000, step: 100) {
+                            settingsInlineLabel(
+                                icon: "drop",
+                                title: L10n.tr("Цель воды"),
+                                trailing: "\(Int(goalWaterMl)) мл"
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $goalEndHour, in: 0...23) {
+                            settingsInlineLabel(
+                                icon: "clock",
+                                title: L10n.tr("План завершить до"),
+                                trailing: String(format: "%02d:00", goalEndHour)
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $autoFinishSuggestionHours, in: 2...12) {
+                            settingsInlineLabel(
+                                icon: "hourglass",
+                                title: L10n.tr("Авто-подсказка завершить через"),
+                                trailing: "\(autoFinishSuggestionHours) ч"
+                            )
+                        }
+                    }
+
+                    settingsSectionHeader(L10n.tr("Недельные цели harm-reduction"))
+                    settingsCard {
+                        Stepper(value: $weeklyHeavyMorningLimit, in: 0...7) {
+                            settingsInlineLabel(
+                                icon: "cloud.sun.rain",
+                                title: L10n.tr("Лимит тяжелых утр"),
+                                trailing: "\(weeklyHeavyMorningLimit)"
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $weeklyHighMemoryRiskLimit, in: 0...7) {
+                            settingsInlineLabel(
+                                icon: "brain.head.profile",
+                                title: L10n.tr("Лимит сессий с высоким риском памяти"),
+                                trailing: "\(weeklyHighMemoryRiskLimit)"
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $weeklyHydrationHitTarget, in: 40...100, step: 5) {
+                            settingsInlineLabel(
+                                icon: "drop.circle",
+                                title: L10n.tr("Цель гидратации в неделю"),
+                                trailing: "\(weeklyHydrationHitTarget)%"
+                            )
+                        }
+                        settingsDivider()
+                        Text(L10n.tr("Цели используются в разделе Аналитика для недельного контроля безопасности."))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                    }
+
+                    settingsSectionHeader(L10n.tr("Безопасность"))
+                    settingsCard {
+                        settingsRow(
+                            icon: "lock.shield",
+                            title: L10n.tr("Safety mode"),
+                            subtitle: L10n.tr("Ранние подсказки риска и акцент на восстановление")
+                        ) {
+                            Toggle("", isOn: $safetyModeEnabled)
+                                .labelsHidden()
+                        }
+                        if safetyModeEnabled {
+                            Text(L10n.tr("Более ранние подсказки риска, акцент на паузы и воду, приоритет действий безопасности."))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        }
+                        settingsDivider()
+                        Button {
+                            showSafetyCenter = true
+                        } label: {
+                            settingsRow(
+                                icon: "cross.case",
+                                title: L10n.tr("Открыть центр безопасности")
+                            ) {
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(Color.white.opacity(0.35))
+                            }
+                        }
+                        settingsDivider()
+                        TextField(L10n.tr("Имя доверенного контакта"), text: $trustedContactName)
+                            .textInputAutocapitalization(.words)
+                        settingsDivider()
+                        TextField(L10n.tr("Телефон доверенного контакта"), text: $trustedContactPhone)
+                            .keyboardType(.phonePad)
+                        if !trustedContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            settingsDivider()
+                            Button {
+                                callTrustedContact()
+                            } label: {
+                                settingsRow(icon: "phone.fill", title: L10n.tr("Проверить звонок контакту")) {
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(Color.white.opacity(0.35))
+                                }
+                            }
+                        }
+                    }
+
+                    settingsSectionHeader(L10n.tr("Интеграции"))
+                    settingsCard {
+                        NavigationLink {
+                            NotificationsSettingsView()
+                        } label: {
+                            settingsRow(icon: "bell.badge", title: L10n.tr("Настройки уведомлений")) {
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(Color.white.opacity(0.35))
+                            }
+                        }
+                        settingsDivider()
+                        settingsRow(icon: "waveform.path.ecg", title: L10n.tr("Live Activity (beta)")) {
+                            Toggle("", isOn: $liveActivityEnabled)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        settingsRow(icon: "drop.fill", title: L10n.tr("Синхронизировать воду с Apple Health")) {
+                            Toggle("", isOn: $syncWaterWithHealth)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        Text(L10n.tr("Когда включено, вода импортируется из Apple Health и новые записи из приложения отправляются обратно в Health."))
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                        Text(waterSyncStatusText)
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                        settingsDivider()
+                        Button {
+                            Task { await connectHealthKit() }
+                        } label: {
+                            settingsRow(
+                                icon: "heart.text.square",
+                                title: connectingHealth ? L10n.tr("Подключаем Apple Health...") : L10n.tr("Подключить Apple Health (сон / вода / шаги / пульс)")
+                            ) {
+                                Image(systemName: "arrow.up.right")
+                                    .foregroundStyle(Color.white.opacity(0.35))
+                            }
+                        }
+                        .disabled(connectingHealth)
+                    }
+
+                    settingsSectionHeader(L10n.tr("CoreML shadow"))
+                    settingsCard {
+                        settingsRow(icon: "cpu", title: L10n.tr("Включить shadow-прогноз")) {
+                            Toggle("", isOn: $shadowRiskModeEnabled)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        Text(L10n.tr("Версия модели: coreml-shadow-v1"))
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                        if let latestShadowRun {
+                            Text(L10n.format("Последний успешный инференс: %@", latestShadowRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        } else {
+                            Text(L10n.tr("Последний успешный инференс: пока нет данных"))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        }
+                        settingsDivider()
+                        Stepper(value: $shadowRolloutMinHistory, in: 3...20) {
+                            settingsInlineLabel(
+                                icon: "clock.arrow.circlepath",
+                                title: L10n.tr("Мин. завершенных сессий"),
+                                trailing: "\(shadowRolloutMinHistory)"
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $shadowRolloutMinConfidence, in: 30...95, step: 5) {
+                            settingsInlineLabel(
+                                icon: "checkmark.seal",
+                                title: L10n.tr("Мин. уверенность для UI"),
+                                trailing: "\(shadowRolloutMinConfidence)%"
+                            )
+                        }
+                        settingsDivider()
+                        Text(L10n.tr("Shadow отображается только при достаточной истории и confidence-пороге; основной риск это не меняет."))
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                        Text(shadowQualitySummary)
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                    }
+
+                    settingsSectionHeader(L10n.tr("Персональные паттерны"))
+                    settingsCard {
+                        settingsRow(icon: "waveform.path", title: L10n.tr("Включить персональные паттерны")) {
+                            Toggle("", isOn: $personalTrendsEnabled)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        settingsRow(icon: "brain", title: L10n.tr("Использовать CoreML для паттернов")) {
+                            Toggle("", isOn: $personalTrendsCoreMLEnabled)
+                                .labelsHidden()
+                        }
+                        settingsDivider()
+                        if let latestPersonalTrendRun {
+                            Text(L10n.format("Последнее обновление паттернов: %@", latestPersonalTrendRun.updatedAt.formatted(date: .abbreviated, time: .shortened)))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        } else {
+                            Text(L10n.tr("Последнее обновление паттернов: пока нет данных"))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        }
+                        settingsDivider()
+                        Stepper(value: $personalTrendsMinHistory, in: 5...30) {
+                            settingsInlineLabel(
+                                icon: "calendar.badge.clock",
+                                title: L10n.tr("Мин. завершенных сессий для паттернов"),
+                                trailing: "\(personalTrendsMinHistory)"
+                            )
+                        }
+                        settingsDivider()
+                        Stepper(value: $personalTrendsMinConfidence, in: 30...95, step: 5) {
+                            settingsInlineLabel(
+                                icon: "percent",
+                                title: L10n.tr("Мин. уверенность паттерна"),
+                                trailing: "\(personalTrendsMinConfidence)%"
+                            )
+                        }
+                        settingsDivider()
+                        Text(personalTrendsSummary)
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                        Text(L10n.tr("Паттерны показывают только наблюдаемые связи в ваших данных и не являются медицинским заключением."))
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.52))
+                    }
+
+                    if debugMenuUnlocked {
+                        settingsSectionHeader(L10n.tr("Debug меню"))
+                        settingsCard {
+                            Toggle(
+                                L10n.tr("Принудительно включить Premium"),
+                                isOn: Binding(
+                                    get: { purchase.debugPremiumOverrideEnabled },
+                                    set: { purchase.setDebugPremiumOverride($0) }
+                                )
+                            )
+                            settingsDivider()
+                            Text(L10n.tr("Используйте только для локальной отладки. Оформление подписки не выполняется."))
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.52))
+                        }
+                    }
+
+                    settingsSectionHeader(L10n.tr("Подписка"))
+                    settingsCard {
+                        settingsRow(
+                            icon: "crown.fill",
+                            title: purchase.isPremium ? L10n.tr("Статус: Premium активен") : L10n.tr("Статус: базовый")
+                        )
+                        settingsDivider()
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            settingsRow(icon: "sparkles", title: purchase.isPremium ? L10n.tr("Управлять подпиской") : L10n.tr("Оформить Premium")) {
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(Color.white.opacity(0.35))
+                            }
+                        }
+                        settingsDivider()
+                        Button {
+                            Task { await purchase.restoreFromAppStore() }
+                        } label: {
+                            settingsRow(icon: "arrow.clockwise", title: L10n.tr("Restore purchases")) {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(Color.white.opacity(0.35))
+                            }
+                        }
+                    }
+
+                    settingsSectionHeader(L10n.tr("Управление данными"))
+                    settingsCard(strokeColor: Color(red: 0.72, green: 0.56, blue: 0.60).opacity(0.72)) {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            settingsRow(icon: "trash.fill", title: L10n.tr("Удалить все данные")) {
+                                Text(L10n.tr("Очистить"))
+                                    .foregroundStyle(Color.red.opacity(0.86))
+                            }
+                        }
+                        settingsDivider()
+                        Button {
+                            exportCSV()
+                        } label: {
+                            settingsRow(icon: "square.and.arrow.up", title: L10n.tr("Экспорт CSV"))
+                        }
+                        if let csvExportURL {
+                            ShareLink(item: csvExportURL) {
+                                settingsRow(icon: "paperplane", title: L10n.tr("Поделиться CSV"))
+                            }
+                        }
+                        settingsDivider()
+                        Button {
+                            exportJSON()
+                        } label: {
+                            settingsRow(icon: "externaldrive", title: L10n.tr("Экспорт JSON-резерва"))
+                        }
+                        if let jsonExportURL {
+                            ShareLink(item: jsonExportURL) {
+                                settingsRow(icon: "paperplane", title: L10n.tr("Поделиться JSON-резервом"))
+                            }
+                        }
+                    }
+
+                    if !statusMessage.isEmpty {
+                        settingsCard {
+                            Text(statusMessage)
+                                .font(.footnote)
+                                .foregroundStyle(Color.white.opacity(0.62))
+                        }
                     }
                 }
-
-                Section(L10n.tr("Подписка")) {
-                    Text(purchase.isPremium ? L10n.tr("Статус: Premium активен") : L10n.tr("Статус: базовый"))
-                        .foregroundStyle(.secondary)
-                    Button(purchase.isPremium ? L10n.tr("Управлять подпиской") : L10n.tr("Оформить Premium")) {
-                        showPaywall = true
-                    }
-                    Button(L10n.tr("Restore purchases")) {
-                        Task { await purchase.restoreFromAppStore() }
-                    }
-                }
-
-                Section(L10n.tr("Управление данными")) {
-                    Button(L10n.tr("Экспорт CSV")) {
-                        exportCSV()
-                    }
-                    if let csvExportURL {
-                        ShareLink(L10n.tr("Поделиться CSV"), item: csvExportURL)
-                    }
-
-                    Button(L10n.tr("Экспорт JSON-резерва")) {
-                        exportJSON()
-                    }
-                    if let jsonExportURL {
-                        ShareLink(L10n.tr("Поделиться JSON-резервом"), item: jsonExportURL)
-                    }
-
-                    Button(role: .destructive) {
-                        showDeleteConfirm = true
-                    } label: {
-                        Text(L10n.tr("Удалить все данные"))
-                    }
-                }
-
-                if !statusMessage.isEmpty {
-                    Section {
-                        Text(statusMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 34)
             }
-            .navigationTitle(L10n.tr("Настройки"))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.08, blue: 0.08),
+                        Color(red: 0.07, green: 0.10, blue: 0.09),
+                        Color(red: 0.08, green: 0.10, blue: 0.09)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .tint(AppDesign.Colors.primary)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.black.opacity(0.28), for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(L10n.tr("Настройки"))
+                    Text("")
+                        .foregroundStyle(Color.white.opacity(0.92))
                         .onTapGesture(count: 5) {
                             debugMenuUnlocked = true
                             statusMessage = L10n.tr("Debug меню разблокировано")
@@ -500,6 +679,87 @@ struct SettingsView: View {
                 SafetyCenterView()
             }
         }
+    }
+
+    private func settingsDivider() -> some View {
+        Divider()
+            .overlay(Color.white.opacity(0.08))
+            .padding(.vertical, 2)
+    }
+
+    private func settingsInlineLabel(icon: String, title: String, trailing: String? = nil) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Color.white.opacity(0.09))
+                .frame(width: 28, height: 28)
+                .overlay(
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.62))
+                )
+            Text(title)
+                .foregroundStyle(Color.white.opacity(0.88))
+            Spacer()
+            if let trailing {
+                Text(trailing)
+                    .foregroundStyle(Color.white.opacity(0.6))
+            }
+        }
+    }
+
+    private func settingsRow<Trailing: View>(
+        icon: String,
+        title: String,
+        subtitle: String? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.white.opacity(0.09))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.62))
+                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.88))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.52))
+                }
+            }
+            Spacer()
+            trailing()
+        }
+    }
+
+    private func settingsRow(icon: String, title: String, subtitle: String? = nil) -> some View {
+        settingsRow(icon: icon, title: title, subtitle: subtitle) {
+            EmptyView()
+        }
+    }
+
+    private func settingsCard<Content: View>(
+        strokeColor: Color = Color.white.opacity(0.08),
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(strokeColor, lineWidth: 1)
+                )
+        )
     }
 
     @MainActor
