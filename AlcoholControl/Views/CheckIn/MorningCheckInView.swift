@@ -10,7 +10,8 @@ struct MorningCheckInView: View {
 
     @State private var wellbeing: Int?
     @State private var selectedSymptoms: Set<MorningCheckIn.Symptom> = []
-    @State private var sleepHours: Double = 7
+    @State private var sleepStartAt = MorningCheckInView.defaultSleepStart
+    @State private var sleepEndAt = MorningCheckInView.defaultSleepEnd
     @State private var hadWater = true
     @State private var showValidation = false
     @State private var healthStatus = ""
@@ -27,6 +28,10 @@ struct MorningCheckInView: View {
 
     private var saveDisabled: Bool {
         wellbeing == nil
+    }
+
+    private var sleepHours: Double {
+        sleepDurationHours(from: sleepStartAt, to: sleepEndAt)
     }
 
     private var recoveryText: String {
@@ -270,6 +275,36 @@ struct MorningCheckInView: View {
                     .buttonStyle(.plain)
                     .disabled(isHealthLoading)
                 }
+
+                supportRow(
+                    icon: "moon.zzz",
+                    title: L10n.tr("Заснул(а)"),
+                    subtitle: formattedTime(sleepStartAt)
+                ) {
+                    DatePicker(
+                        "",
+                        selection: $sleepStartAt,
+                        displayedComponents: [.hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(AppDesign.Colors.primary)
+                }
+
+                supportRow(
+                    icon: "sun.max",
+                    title: L10n.tr("Проснулся(лась)"),
+                    subtitle: formattedTime(sleepEndAt)
+                ) {
+                    DatePicker(
+                        "",
+                        selection: $sleepEndAt,
+                        displayedComponents: [.hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(AppDesign.Colors.primary)
+                }
             }
 
             if !healthStatus.isEmpty {
@@ -408,10 +443,52 @@ struct MorningCheckInView: View {
         }
 
         if let imported = await HealthKitService.shared.fetchLastNightSleepHours() {
-            sleepHours = imported
+            sleepEndAt = MorningCheckInView.defaultSleepEnd
+            sleepStartAt = sleepEndAt.addingTimeInterval(-(imported * 3600))
             healthStatus = L10n.format("Импортировано: %.1f ч сна.", imported)
         } else {
             healthStatus = L10n.tr("Не удалось получить данные сна за последнюю ночь.")
         }
     }
+
+    private func formattedTime(_ date: Date) -> String {
+        Self.timeFormatter.string(from: date)
+    }
+
+    private func sleepDurationHours(from start: Date, to end: Date) -> Double {
+        let calendar = Calendar.autoupdatingCurrent
+        let startComponents = calendar.dateComponents([.hour, .minute], from: start)
+        let endComponents = calendar.dateComponents([.hour, .minute], from: end)
+
+        guard
+            let startMinutes = startComponents.hour.map({ $0 * 60 + (startComponents.minute ?? 0) }),
+            let endMinutes = endComponents.hour.map({ $0 * 60 + (endComponents.minute ?? 0) })
+        else {
+            return 0
+        }
+
+        var diff = endMinutes - startMinutes
+        if diff < 0 {
+            diff += 24 * 60
+        }
+
+        return Double(diff) / 60.0
+    }
+
+    private static var defaultSleepEnd: Date {
+        let calendar = Calendar.autoupdatingCurrent
+        return calendar.date(bySettingHour: 7, minute: 30, second: 0, of: .now) ?? .now
+    }
+
+    private static var defaultSleepStart: Date {
+        defaultSleepEnd.addingTimeInterval(-(7 * 3600))
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter
+    }()
 }

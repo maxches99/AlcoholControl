@@ -204,6 +204,14 @@ struct TodayView: View {
         sessions.first(where: isCheckInAvailable(for:))
     }
 
+    private var hasMorningCheckInToday: Bool {
+        let calendar = Calendar.current
+        return sessions.contains { session in
+            guard let checkIn = session.morningCheckIn else { return false }
+            return calendar.isDateInToday(checkIn.createdAt)
+        }
+    }
+
     private var profile: UserProfile? {
         profiles.first
     }
@@ -823,16 +831,10 @@ struct TodayView: View {
                 DashboardQuickActionItem(
                     id: "add-water",
                     title: L10n.tr("Гидратация"),
-                    subtitle: L10n.tr("+250 мл воды"),
+                    subtitle: L10n.tr("Открыть трекер"),
                     icon: "drop",
                     action: {
-                        sessionService.addWater(
-                            to: activeSession,
-                            context: context,
-                            profile: profile,
-                            volumeMl: 250
-                        )
-                        infoMessage = L10n.tr("Добавлено: +250 мл воды")
+                        activeSheet = .addWater(activeSession.id)
                     }
                 )
             ]
@@ -1025,12 +1027,12 @@ struct TodayView: View {
 
     private func easingWindowText(for soberAt: Date?) -> String {
         guard let soberAt else {
-            return L10n.tr("Уже близко к 0.00")
+            return L10n.tr("Сейчас по оценке уже трезво")
         }
 
         let minutesToSober = max(0, Int(soberAt.timeIntervalSinceNow / 60))
         if minutesToSober == 0 {
-            return L10n.tr("Уже близко к 0.00")
+            return L10n.tr("Сейчас по оценке уже трезво")
         }
 
         let minutesToRelief = max(20, Int((Double(minutesToSober) * 0.45).rounded()))
@@ -2212,6 +2214,7 @@ struct TodayView: View {
 
     private func isCheckInAvailable(for session: Session) -> Bool {
         guard !session.isActive, session.morningCheckIn == nil else { return false }
+        guard !hasMorningCheckInToday else { return false }
         let hour = Calendar.current.component(.hour, from: .now)
         return hour >= 6 && hour < 18
     }
@@ -3042,77 +3045,432 @@ private struct AddMealSheet: View {
 private struct AddWaterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Query(sort: [SortDescriptor<WaterEntry>(\.createdAt, order: .reverse)]) private var allWaters: [WaterEntry]
 
     let session: Session
     let profile: UserProfile?
 
-    @State private var selectedVolume = 250.0
+    @AppStorage("goalWaterMl") private var goalWaterMl = 1200.0
+    @State private var selectedVolume = 350.0
+    @State private var showCustomVolumeSheet = false
     @State private var showSavedHint = false
 
     private let service = SessionService()
     private let insightService = SessionInsightService()
+    private let quickVolumes: [Int] = [250, 500, 750]
+
+    private var todayWaters: [WaterEntry] {
+        session.waters
+            .filter { Calendar.current.isDateInToday($0.createdAt) }
+            .sorted(by: { $0.createdAt > $1.createdAt })
+    }
+
+    private var consumedMl: Int {
+        Int(todayWaters.compactMap(\.volumeMl).reduce(0, +))
+    }
+
+    private var targetMl: Int {
+        max(1, Int(goalWaterMl.rounded()))
+    }
+
+    private var hydrationProgress: Double {
+        min(1, Double(consumedMl) / Double(targetMl))
+    }
+
+    private var hydrationPercent: Int {
+        Int((hydrationProgress * 100).rounded())
+    }
+
+    private var weeklyBars: [HydrationWeekBar] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let maxValue = max(1000, Int(goalWaterMl.rounded()))
+
+        return (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: -(6 - offset), to: today) else { return nil }
+            let value = Int(
+                allWaters
+                    .filter { calendar.isDate($0.createdAt, inSameDayAs: day) }
+                    .compactMap(\.volumeMl)
+                    .reduce(0, +)
+            )
+            let ratio = min(1, Double(value) / Double(maxValue))
+
+            return HydrationWeekBar(
+                id: day.timeIntervalSince1970,
+                dayLabel: shortWeekday(for: day),
+                ratio: ratio
+            )
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Быстрый объем") {
-                    HStack {
-                        quickVolumeButton(200)
-                        quickVolumeButton(300)
-                        quickVolumeButton(500)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.tr("Hydration"))
+                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                            .foregroundStyle(Color.white.opacity(0.94))
+                        Text(L10n.tr("Stay balanced and refreshed"))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.white.opacity(0.58))
+                    }
+                    .padding(.top, 4)
+
+                    progressCard
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L10n.tr("Quick Add"))
+                            .font(.system(.title3, design: .rounded).weight(.bold))
+                            .foregroundStyle(Color.white.opacity(0.9))
+
+                        ForEach(quickVolumes, id: \.self) { volume in
+                            quickVolumeButton(volume)
+                        }
+                    }
+
+                    tipCard
+                    todayLogsCard
+                    weeklyTrendsCard
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.08, blue: 0.08),
+                        Color(red: 0.07, green: 0.10, blue: 0.09),
+                        Color(red: 0.08, green: 0.10, blue: 0.09)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle(L10n.tr("Гидратация"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.tr("Закрыть")) {
+                        dismiss()
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showCustomVolumeSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus")
+                            Text(L10n.tr("Свой объём"))
+                        }
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.black.opacity(0.78))
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 14)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(red: 0.78, green: 0.83, blue: 0.77))
+                        )
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(Color.clear)
+            }
+            .sheet(isPresented: $showCustomVolumeSheet) {
+                NavigationStack {
+                    Form {
+                        Section {
+                            Stepper(value: $selectedVolume, in: 50...2000, step: 50) {
+                                HStack {
+                                    Text(L10n.tr("Объём"))
+                                    Spacer()
+                                    Text(L10n.format("%d мл", Int(selectedVolume)))
+                                }
+                            }
+                        }
 
-                Section {
-                    Stepper(value: $selectedVolume, in: 50...2000, step: 50) {
-                        HStack {
-                            Text("Свой объем")
-                            Spacer()
-                            Text("\(Int(selectedVolume)) мл")
+                        Section {
+                            Button(L10n.tr("Добавить воду")) {
+                                save(volume: selectedVolume)
+                                showCustomVolumeSheet = false
+                            }
+                            Button(L10n.tr("Просто отметить")) {
+                                save(volume: nil)
+                                showCustomVolumeSheet = false
+                            }
+                        }
+                    }
+                    .navigationTitle(L10n.tr("Свой лог воды"))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.tr("Закрыть")) {
+                                showCustomVolumeSheet = false
+                            }
                         }
                     }
                 }
-
-                Section {
-                    Button("Добавить воду") {
-                        save(volume: selectedVolume)
-                    }
-                    Button("Просто отметил(а)") {
-                        save(volume: nil)
-                    }
-                }
-
-                if showSavedHint {
-                    Text("Сохранено")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
-            .navigationTitle("+ Вода")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") {
-                        dismiss()
-                    }
+            .overlay(alignment: .top) {
+                if showSavedHint {
+                    Text(L10n.tr("Сохранено"))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.black.opacity(0.4))
+                        )
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
         }
     }
 
-    private func quickVolumeButton(_ volume: Double) -> some View {
-        Button("\(Int(volume))") {
-            save(volume: volume)
+    private var progressCard: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.14), lineWidth: 16)
+                Circle()
+                    .trim(from: 0, to: hydrationProgress)
+                    .stroke(
+                        Color(red: 0.46, green: 0.79, blue: 0.96),
+                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 6) {
+                    Image(systemName: "drop.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color(red: 0.17, green: 0.68, blue: 0.93))
+                    Text(L10n.format("%d", consumedMl))
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .minimumScaleFactor(0.65)
+                    Text(L10n.tr("ml today"))
+                        .font(.headline.weight(.medium))
+                        .foregroundStyle(Color.white.opacity(0.56))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 238)
+
+            HStack(spacing: 12) {
+                hydrationMetricCard(
+                    value: L10n.format("%d%%", hydrationPercent),
+                    subtitle: L10n.tr("Daily Goal")
+                )
+                hydrationMetricCard(
+                    value: L10n.format("%.1fL", Double(targetMl) / 1000),
+                    subtitle: L10n.tr("Target")
+                )
+            }
         }
-        .buttonStyle(.bordered)
-        .frame(maxWidth: .infinity)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func hydrationMetricCard(value: String, subtitle: String) -> some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .minimumScaleFactor(0.75)
+            Text(subtitle)
+                .font(.headline.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.52))
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.black.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func quickVolumeButton(_ volume: Int) -> some View {
+        Button {
+            save(volume: Double(volume))
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "drop.circle")
+                    .font(.headline)
+                    .foregroundStyle(Color.white.opacity(0.62))
+                Text(L10n.format("%dml", volume))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(Color.white.opacity(volume == 500 ? 0.54 : 0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var tipCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "lightbulb")
+                    .foregroundStyle(Color(red: 0.19, green: 0.54, blue: 0.27))
+                Text(L10n.tr("Pro Tip"))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color(red: 0.19, green: 0.54, blue: 0.27))
+            }
+            Text(L10n.tr("Alternating water with other drinks helps maintain balance and keeps you feeling better tomorrow morning."))
+                .font(.title3.weight(.medium))
+                .foregroundStyle(Color(red: 0.19, green: 0.54, blue: 0.27))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color(red: 0.79, green: 0.85, blue: 0.80))
+        )
+    }
+
+    private var todayLogsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(L10n.tr("Today's Logs"))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                Spacer()
+                Text(L10n.format("%d", todayWaters.count))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.58))
+            }
+
+            if todayWaters.isEmpty {
+                Text(L10n.tr("Пока нет записей воды за сегодня."))
+                    .font(.subheadline)
+                    .foregroundStyle(Color.white.opacity(0.58))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(todayWaters.enumerated()), id: \.element.id) { index, water in
+                        waterLogRow(water)
+                        if index < todayWaters.count - 1 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.08))
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func waterLogRow(_ water: WaterEntry) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.white.opacity(0.86))
+                .frame(width: 42, height: 42)
+                .overlay(
+                    Image(systemName: "drop.fill")
+                        .foregroundStyle(Color(red: 0.17, green: 0.55, blue: 0.89))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(water.volumeMl.map { L10n.format("%dml Water", Int($0)) } ?? L10n.tr("Water mark"))
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                Text(water.createdAt, format: .dateTime.hour().minute())
+                    .font(.subheadline)
+                    .foregroundStyle(Color.white.opacity(0.56))
+            }
+            Spacer()
+        }
+        .padding(.vertical, 12)
+    }
+
+    private var weeklyTrendsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.tr("Weekly Trends"))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.9))
+
+            HStack(alignment: .bottom, spacing: 14) {
+                ForEach(weeklyBars) { bar in
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color(red: 0.30, green: 0.71, blue: 0.90))
+                            .frame(width: 20, height: max(6, CGFloat(bar.ratio) * 118))
+                        Text(bar.dayLabel)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 128, alignment: .bottom)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func shortWeekday(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
+        let value = formatter.string(from: date)
+        return value.isEmpty ? "-" : String(value.prefix(1)).uppercased()
     }
 
     private func save(volume: Double?) {
         service.addWater(to: session, context: context, profile: profile, volumeMl: volume)
         scheduleHydrationNudgeIfNeeded()
-        showSavedHint = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            dismiss()
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showSavedHint = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                showSavedHint = false
+            }
         }
     }
 
@@ -3131,6 +3489,12 @@ private struct AddWaterSheet: View {
                 NotificationService.shared.cancelHydrationNudge()
             }
         }
+    }
+
+    private struct HydrationWeekBar: Identifiable {
+        let id: TimeInterval
+        let dayLabel: String
+        let ratio: Double
     }
 }
 
