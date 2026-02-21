@@ -88,3 +88,11 @@ Minimum for a PR with logic changes:
 - Keep terminology consistent across README and in-app copy (for example: "morning check-in", "weekly safety analytics", "Live Activity", "Apple Health (HealthKit)").
 - Use "weekly safety analytics" for the analytics screen and "weekly summary" for the shareable summary text.
 - If you introduce a new concept, update README and any relevant in-app strings together.
+
+## 10. Delivery checklist (before finishing)
+
+- Build the affected scheme at minimum (`AlcoholControl`; add widget/watch scheme build if those targets changed).
+- If services/calculations changed, add or update at least one focused unit test branch.
+- Re-check localized strings added/changed use `L10n.tr(...)` / `L10n.format(...)`.
+- Confirm no accidental changes to bundle IDs, entitlements, App Group ID, or StoreKit product IDs.
+- Keep README aligned with newly introduced user-facing concepts or terminology changes.

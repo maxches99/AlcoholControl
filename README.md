@@ -44,6 +44,9 @@ AlcoholControl is a harm-reduction iOS app for tracking evening sessions: BAC es
 ## Project structure
 
 - `AlcoholControl/` - main iOS app.
+- `AlcoholControl/Services/` - business logic (`SessionService`, `BACCalculator`, `SessionInsightService`, `HealthKitService`, `NotificationService`, `PurchaseService`).
+- `AlcoholControl/Models/` - SwiftData domain models.
+- `AlcoholControl/Views/` - product screens.
 - `AlcoholControlWidget/` - widget + Live Activity UI.
 - `AlcoholControlWatch/` - watchOS companion.
 - `AlcoholControlTests/` - unit tests.
@@ -71,6 +74,8 @@ xcodebuild \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
   test
 
+# If widget/watch code changed, build corresponding schemes too
+
 # Regenerate CoreML shadow models
 ./Scripts/generate_shadow_models.sh
 ```
@@ -82,6 +87,15 @@ xcodebuild \
 - HealthKit entitlement is enabled only in the main app target.
 - The widget reads state snapshots from `UserDefaults(suiteName: appGroupID)`.
 - Watch/widget quick actions are synced via `WidgetSnapshotStore`.
+
+## Product invariants
+
+- Any BAC calculation change must account for `UserProfile` (`weight`, `unitSystem`, `sex`).
+- Changes in `SessionService` must preserve recompute behavior for `cachedPeakBAC` and `cachedEstimatedSoberAt`.
+- Widget/watch quick actions must keep key compatibility in `WidgetSnapshotStore`.
+- Respect privacy setting "Hide BAC in sharing".
+- Route all user-facing strings via `L10n.tr(...)` / `L10n.format(...)`.
+- Keep UX tone supportive and harm-reduction focused; avoid medical/legal wording.
 
 ## Privacy and safety
 
@@ -103,6 +117,8 @@ xcodebuild \
 - Route all user-facing strings through `L10n.tr(...)` / `L10n.format(...)`.
 - If you change CoreML shadow features/weights, regenerate `AlcoholControl/ML/*.mlmodel`.
 - Preserve the harm-reduction tone and avoid medical or legal-sounding claims.
+- For new persisted SwiftData entities, update the schema in `AlcoholControlApp`.
+- Do not change bundle identifiers, entitlements, App Group ID, or subscription product IDs without explicit request.
 
 ## Test status
 
