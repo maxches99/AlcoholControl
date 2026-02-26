@@ -2676,125 +2676,363 @@ private struct AddDrinkFlowSheet: View {
 
     private let service = SessionService()
     private let insightService = SessionInsightService()
-    private let groupedDefaults = DrinkCatalog.groupedDefaults
     @State private var searchText = ""
+    @State private var selectedCategory: DrinkCategoryTab = .cocktails
+    @State private var showDetails = false
+    @State private var remoteDrinkInfoByPresetID: [String: AlcoholDrinkInfo] = [:]
+    @State private var didLoadRemoteDrinkInfo = false
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var filteredRecentPresets: [DrinkPresetModel] {
-        Array(recentPresets.filter(matchesPreset).prefix(5))
-    }
-
     private var favoritePresets: [DrinkPresetModel] {
         let ids = favoritePresetIDSet
-        return DrinkCatalog.defaults.filter { ids.contains($0.id) && matchesPreset($0) }
+        return DrinkCatalog.defaults.filter { ids.contains($0.id) }
     }
 
-    private var filteredGroups: [(DrinkPresetGroup, [DrinkPresetModel])] {
-        groupedDefaults.compactMap { group, presets in
-            let filtered = presets.filter(matchesPreset)
-            return filtered.isEmpty ? nil : (group, filtered)
+    private var mergedPresets: [DrinkPresetModel] {
+        var seen = Set<String>()
+        var merged: [DrinkPresetModel] = []
+        let sources = [recentPresets, favoritePresets, DrinkCatalog.defaults]
+        for source in sources {
+            for preset in source where seen.insert(preset.id).inserted {
+                merged.append(preset)
+            }
         }
+        return merged.filter(matchesPreset)
+    }
+
+    private var popularTonightPresets: [DrinkPresetModel] {
+        Array(mergedPresets.prefix(4))
+    }
+
+    private var craftSelectionPresets: [DrinkPresetModel] {
+        Array(mergedPresets.dropFirst(4).prefix(8))
     }
 
     private var hasNoResults: Bool {
-        !trimmedSearchText.isEmpty && filteredRecentPresets.isEmpty && filteredGroups.isEmpty
+        mergedPresets.isEmpty
+    }
+
+    private var sessionDrinkCount: Int {
+        session.drinks.count
     }
 
     var body: some View {
         NavigationStack {
-            List {
-                if !favoritePresets.isEmpty {
-                    Section("Избранное") {
-                        ForEach(favoritePresets) { preset in
-                            presetRowWithFavorite(preset)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    header
+                    searchBar
+                    categorySelector
+
+                    sectionHeader(
+                        title: L10n.tr("Популярно сегодня"),
+                        actionTitle: ""
+                    )
+
+                    if hasNoResults {
+                        emptyState
+                    } else {
+                        drinksGrid(popularTonightPresets)
+                        activeSessionCard
+                        sectionHeader(
+                            title: L10n.tr("Подборка"),
+                            actionTitle: L10n.tr("Смотреть все")
+                        )
+                        drinksGrid(craftSelectionPresets)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button {
+                            showDetails = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "slider.horizontal.3")
+                                Text(L10n.tr("Детали напитка"))
+                            }
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(Color.black.opacity(0.78))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color(red: 0.74, green: 0.79, blue: 0.72))
+                            )
                         }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.top, 4)
                 }
-
-                if !filteredRecentPresets.isEmpty {
-                    Section("Недавние") {
-                        ForEach(filteredRecentPresets) { preset in
-                            presetRowWithFavorite(preset)
-                        }
-                    }
-                }
-
-                ForEach(filteredGroups, id: \.0.id) { group, presets in
-                    Section(group.title) {
-                        ForEach(presets) { preset in
-                            presetRowWithFavorite(preset)
-                        }
-                    }
-                }
-
-                if hasNoResults {
-                    Section {
-                        Text("По запросу ничего не найдено")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Другое / Коктейль") {
-                    NavigationLink("Открыть детали напитка") {
-                        AddDrinkDetailsView(session: session, profile: profile)
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .listStyle(.insetGrouped)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Поиск напитка или коктейля")
-            .navigationTitle("Добавить напиток")
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.08, blue: 0.07),
+                        Color(red: 0.07, green: 0.10, blue: 0.09),
+                        Color(red: 0.09, green: 0.11, blue: 0.09)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") {
+                    Button(L10n.tr("Закрыть")) {
                         dismiss()
                     }
                 }
             }
+            .navigationDestination(isPresented: $showDetails) {
+                AddDrinkDetailsView(session: session, profile: profile)
+            }
+            .task {
+                guard !didLoadRemoteDrinkInfo else { return }
+                didLoadRemoteDrinkInfo = true
+                await loadRemoteDrinkInfo()
+            }
         }
     }
 
-    private func presetRow(_ preset: DrinkPresetModel) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(preset.title.localized)
-                    .foregroundStyle(.primary)
-                Text(preset.subtitle.localized)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(L10n.format("%d мл @ %d%%", Int(preset.volumeMl), Int(preset.abv)))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.tr("Текущая сессия"))
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(Color.white.opacity(0.58))
+                Text(L10n.tr("Соберите свои напитки"))
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.94))
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 12)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.82))
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.72))
+            TextField(L10n.tr("Поиск коктейлей и напитков..."), text: $searchText)
+                .textInputAutocapitalization(.words)
+                .disableAutocorrection(true)
+                .foregroundStyle(Color.white.opacity(0.92))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var categorySelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.tr("Категории"))
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.94))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(DrinkCategoryTab.allCases) { tab in
+                        Button {
+                            selectedCategory = tab
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: tab.iconName)
+                                Text(tab.title)
+                            }
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(tab == selectedCategory ? Color.black.opacity(0.78) : Color.white.opacity(0.88))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(tab == selectedCategory ? Color(red: 0.74, green: 0.79, blue: 0.72) : Color.white.opacity(0.06))
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .stroke(Color.white.opacity(tab == selectedCategory ? 0 : 0.09), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(title: String, actionTitle: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(.title2, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.white.opacity(0.96))
             Spacer()
-            Image(systemName: iconName(for: preset.category))
-                .foregroundStyle(.tint)
+            Text(actionTitle)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color(red: 0.67, green: 0.73, blue: 0.64))
         }
     }
 
-    private func presetRowWithFavorite(_ preset: DrinkPresetModel) -> some View {
-        HStack {
-            Button {
-                savePreset(preset)
-            } label: {
-                presetRow(preset)
+    private func drinksGrid(_ presets: [DrinkPresetModel]) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 14),
+            GridItem(.flexible(), spacing: 14)
+        ]
+        return LazyVGrid(columns: columns, spacing: 14) {
+            ForEach(presets) { preset in
+                drinkCard(preset)
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-
-            Button {
-                toggleFavorite(preset)
-            } label: {
-                Image(systemName: favoritePresetIDSet.contains(preset.id) ? "star.fill" : "star")
-                    .foregroundStyle(.yellow)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(favoritePresetIDSet.contains(preset.id) ? "Убрать из избранного" : "Добавить в избранное")
         }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.tr("Ничего не найдено"))
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.9))
+            Text(L10n.tr("Попробуйте сменить категорию или изменить запрос."))
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.62))
+            Button(L10n.tr("Открыть детали напитка")) {
+                showDetails = true
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color(red: 0.56, green: 0.63, blue: 0.54))
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    private func drinkCard(_ preset: DrinkPresetModel) -> some View {
+        let remoteInfo = remoteDrinkInfoByPresetID[preset.id]
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: iconName(for: preset.category))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.white.opacity(0.82))
+                        Text((remoteInfo?.name).flatMap { $0.isEmpty ? nil : $0 } ?? preset.title.localized)
+                            .font(.system(.title3, design: .rounded).weight(.bold))
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(Color.white.opacity(0.95))
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        toggleFavorite(preset)
+                    } label: {
+                        Image(systemName: favoritePresetIDSet.contains(preset.id) ? "heart.fill" : "heart")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.white.opacity(0.95))
+                            .padding(8)
+                            .background(Circle().fill(Color.black.opacity(0.25)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(detailsLine(for: preset, info: remoteInfo))
+                    .font(.subheadline.weight(.regular))
+                    .foregroundStyle(Color.white.opacity(0.64))
+
+                Text(compositionLine(for: preset, info: remoteInfo))
+                    .font(.caption)
+                    .lineLimit(3)
+                    .foregroundStyle(Color.white.opacity(0.58))
+
+                Spacer(minLength: 10)
+
+                Button {
+                    savePreset(preset)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                        Text(L10n.tr("Добавить в сессию"))
+                            .lineLimit(1)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color(red: 0.36, green: 0.33, blue: 0.48))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 188, maxHeight: 188, alignment: .topLeading)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var activeSessionCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.tr("Активная сессия"))
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                .foregroundStyle(Color.black.opacity(0.78))
+            Text(L10n.format("Сейчас в списке: %d напит.", sessionDrinkCount))
+                .font(.title3.weight(.regular))
+                .foregroundStyle(Color.black.opacity(0.72))
+            Text(L10n.tr("Добавляйте напитки в течение вечера, чтобы видеть динамику и вовремя делать паузы."))
+                .font(.body)
+                .foregroundStyle(Color.black.opacity(0.66))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color(red: 0.70, green: 0.76, blue: 0.67))
+        )
     }
 
     private func matchesPreset(_ preset: DrinkPresetModel) -> Bool {
+        guard selectedCategory.matches(preset.category) else { return false }
         guard !trimmedSearchText.isEmpty else { return true }
         return preset.title.localized.localizedCaseInsensitiveContains(trimmedSearchText)
             || preset.subtitle.localized.localizedCaseInsensitiveContains(trimmedSearchText)
@@ -2821,12 +3059,49 @@ private struct AddDrinkFlowSheet: View {
         favoritePresetIDs = ids.sorted().joined(separator: ",")
     }
 
+    private func loadRemoteDrinkInfo() async {
+        let presets = DrinkCatalog.defaults
+
+        await withTaskGroup(of: (String, AlcoholDrinkInfo?).self) { group in
+            for preset in presets {
+                group.addTask {
+                    let info = await AlcoholInfoService.shared.info(for: preset)
+                    return (preset.id, info)
+                }
+            }
+
+            var loaded: [String: AlcoholDrinkInfo] = [:]
+            for await (presetID, info) in group {
+                if let info {
+                    loaded[presetID] = info
+                }
+            }
+
+            await MainActor.run {
+                remoteDrinkInfoByPresetID.merge(loaded) { _, new in new }
+            }
+        }
+    }
+
+    private func detailsLine(for preset: DrinkPresetModel, info: AlcoholDrinkInfo?) -> String {
+        let type = (info?.type).flatMap { $0.isEmpty ? nil : $0 } ?? preset.category.label
+        let abv = info?.abvPercent ?? preset.abv
+        return L10n.format("Тип: %@ · Крепость: %.1f%%", type, abv)
+    }
+
+    private func compositionLine(for preset: DrinkPresetModel, info: AlcoholDrinkInfo?) -> String {
+        let fallback = preset.subtitle.localized
+        let source = (info?.composition).flatMap { $0.isEmpty ? nil : $0 } ?? fallback
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        return L10n.format("Состав: %@", trimmed)
+    }
+
     private func iconName(for category: DrinkEntry.Category) -> String {
         switch category {
         case .beer: return "mug.fill"
         case .wine: return "wineglass.fill"
         case .spirits, .liqueur: return "flame.fill"
-        case .cocktail: return "martini.glass.fill"
+        case .cocktail: return "wineglass.fill"
         case .cider, .seltzer: return "sparkles"
         case .other: return "plus.circle.fill"
         }
@@ -2860,6 +3135,61 @@ private struct AddDrinkFlowSheet: View {
                 await NotificationService.shared.scheduleHydrationNudge(for: session.id, requiredMl: requiredMl)
             } else {
                 NotificationService.shared.cancelHydrationNudge()
+            }
+        }
+    }
+
+    private enum DrinkCategoryTab: String, CaseIterable, Identifiable {
+        case cocktails
+        case beer
+        case wine
+        case spirits
+        case all
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .cocktails:
+                return L10n.tr("Коктейли")
+            case .beer:
+                return L10n.tr("Пиво")
+            case .wine:
+                return L10n.tr("Вино")
+            case .spirits:
+                return L10n.tr("Крепкие")
+            case .all:
+                return L10n.tr("Все")
+            }
+        }
+
+        var iconName: String {
+            switch self {
+            case .cocktails:
+                return "wineglass"
+            case .beer:
+                return "mug.fill"
+            case .wine:
+                return "wineglass.fill"
+            case .spirits:
+                return "flame.fill"
+            case .all:
+                return "line.3.horizontal.decrease.circle.fill"
+            }
+        }
+
+        func matches(_ category: DrinkEntry.Category) -> Bool {
+            switch self {
+            case .cocktails:
+                return category == .cocktail
+            case .beer:
+                return category == .beer || category == .cider || category == .seltzer
+            case .wine:
+                return category == .wine
+            case .spirits:
+                return category == .spirits || category == .liqueur || category == .other
+            case .all:
+                return true
             }
         }
     }
@@ -3045,6 +3375,7 @@ private struct AddMealSheet: View {
 private struct AddWaterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: [SortDescriptor<WaterEntry>(\.createdAt, order: .reverse)]) private var allWaters: [WaterEntry]
 
     let session: Session
@@ -3054,9 +3385,12 @@ private struct AddWaterSheet: View {
     @State private var selectedVolume = 350.0
     @State private var showCustomVolumeSheet = false
     @State private var showSavedHint = false
+    @State private var animatedHydrationProgress = 0.0
+    @State private var waterPulseScale: CGFloat = 1
 
     private let service = SessionService()
     private let insightService = SessionInsightService()
+    private let calculator = BACCalculator()
     private let quickVolumes: [Int] = [250, 500, 750]
 
     private var todayWaters: [WaterEntry] {
@@ -3079,6 +3413,11 @@ private struct AddWaterSheet: View {
 
     private var hydrationPercent: Int {
         Int((hydrationProgress * 100).rounded())
+    }
+
+    private var currentBAC: Double {
+        guard let profile else { return 0 }
+        return calculator.compute(for: session, profile: profile).currentBAC
     }
 
     private var weeklyBars: [HydrationWeekBar] {
@@ -3232,6 +3571,20 @@ private struct AddWaterSheet: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .onAppear {
+                animatedHydrationProgress = hydrationProgress
+            }
+            .onChange(of: hydrationProgress) { oldValue, newValue in
+                if reduceMotion {
+                    animatedHydrationProgress = newValue
+                } else {
+                    let delta = abs(newValue - oldValue)
+                    let duration = 1.05 + min(0.95, delta * 2.6)
+                    withAnimation(.timingCurve(0.16, 0.84, 0.20, 1.0, duration: duration)) {
+                        animatedHydrationProgress = newValue
+                    }
+                }
+            }
         }
     }
 
@@ -3241,20 +3594,30 @@ private struct AddWaterSheet: View {
                 Circle()
                     .stroke(Color.white.opacity(0.14), lineWidth: 16)
                 Circle()
-                    .trim(from: 0, to: hydrationProgress)
+                    .trim(from: 0, to: animatedHydrationProgress)
                     .stroke(
                         Color(red: 0.46, green: 0.79, blue: 0.96),
                         style: StrokeStyle(lineWidth: 16, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
 
+                HydrationWaveOrb(
+                    progress: animatedHydrationProgress,
+                    reduceMotion: reduceMotion,
+                    bac: currentBAC
+                )
+                    .frame(width: 168, height: 168)
+                    .scaleEffect(waterPulseScale)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.72), value: waterPulseScale)
+
                 VStack(spacing: 6) {
                     Image(systemName: "drop.fill")
                         .font(.title3)
-                        .foregroundStyle(Color(red: 0.17, green: 0.68, blue: 0.93))
+                        .foregroundStyle(Color.white.opacity(0.92))
                     Text(L10n.format("%d", consumedMl))
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.white.opacity(0.94))
+                        .contentTransition(.numericText(value: Double(consumedMl)))
                         .minimumScaleFactor(0.65)
                     Text(L10n.tr("ml today"))
                         .font(.headline.weight(.medium))
@@ -3464,8 +3827,15 @@ private struct AddWaterSheet: View {
     private func save(volume: Double?) {
         service.addWater(to: session, context: context, profile: profile, volumeMl: volume)
         scheduleHydrationNudgeIfNeeded()
+        waterPulseScale = 1
         withAnimation(.easeInOut(duration: 0.18)) {
             showSavedHint = true
+            waterPulseScale = 1.08
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            withAnimation(.easeOut(duration: 0.32)) {
+                waterPulseScale = 1
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
             withAnimation(.easeInOut(duration: 0.18)) {
@@ -3496,6 +3866,72 @@ private struct AddWaterSheet: View {
         let dayLabel: String
         let ratio: Double
     }
+}
+
+private struct HydrationWaveOrb: View {
+    let progress: Double
+    let reduceMotion: Bool
+    let bac: Double
+
+    private var clampedProgress: Double {
+        min(1, max(0, progress))
+    }
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                waveBody(time: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    waveBody(time: context.date.timeIntervalSinceReferenceDate)
+                }
+            }
+        }
+        .drawingGroup()
+    }
+
+    private func waveBody(time: TimeInterval) -> some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let shaderTime = Float(time.truncatingRemainder(dividingBy: 1000))
+
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.05))
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.37, green: 0.85, blue: 0.97),
+                                Color(red: 0.18, green: 0.62, blue: 0.90),
+                                Color(red: 0.12, green: 0.49, blue: 0.84)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .colorEffect(
+                        Shader(
+                            function: .init(library: .default, name: "hydrationWaveMask"),
+                            arguments: [
+                                .float(shaderTime),
+                                .float2(Float(size.width), Float(size.height)),
+                                .float(Float(clampedProgress)),
+                                .float(Float(bac))
+                            ]
+                        )
+                    )
+
+            }
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            )
+        }
+    }
+
 }
 
 private struct PromilleInfoSheet: View {

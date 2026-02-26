@@ -163,13 +163,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func settingsSectionHeader(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(.subheadline, design: .rounded).weight(.bold))
-                .foregroundStyle(Color.white.opacity(0.86))
-                .textCase(nil)
-            Spacer()
-        }
+        AppSectionHeader(title: title)
     }
 
     var body: some View {
@@ -178,7 +172,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(L10n.tr("Настройки"))
-                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .font(AppDesign.Typography.screenTitle)
                             .foregroundStyle(Color.white.opacity(0.96))
                         Text(L10n.tr("Настройте приложение под свои цели и ритм."))
                             .font(.title3.weight(.medium))
@@ -211,7 +205,7 @@ struct SettingsView: View {
                                 .font(.headline.weight(.bold))
                                 .foregroundStyle(Color.black.opacity(0.44))
                         }
-                        .padding(18)
+                        .padding(AppDesign.Spacing.md + 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             LinearGradient(
@@ -223,7 +217,7 @@ struct SettingsView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: AppDesign.Radius.xxl, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -613,22 +607,11 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 34)
+                .padding(.horizontal, AppDesign.Spacing.lg - 4)
+                .padding(.top, AppDesign.Spacing.md + 2)
+                .padding(.bottom, AppDesign.Spacing.xl + 2)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.06, green: 0.08, blue: 0.08),
-                        Color(red: 0.07, green: 0.10, blue: 0.09),
-                        Color(red: 0.08, green: 0.10, blue: 0.09)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            )
+            .appDarkScreenBackground()
             .tint(AppDesign.Colors.primary)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -689,14 +672,11 @@ struct SettingsView: View {
 
     private func settingsInlineLabel(icon: String, title: String, trailing: String? = nil) -> some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(Color.white.opacity(0.09))
-                .frame(width: 28, height: 28)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.62))
-                )
+            AppIconBadge(
+                icon: icon,
+                size: 28,
+                iconFont: AppDesign.Typography.iconBadge
+            )
             Text(title)
                 .foregroundStyle(Color.white.opacity(0.88))
             Spacer()
@@ -714,17 +694,14 @@ struct SettingsView: View {
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.white.opacity(0.09))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.62))
-                )
+            AppIconBadge(
+                icon: icon,
+                size: 40,
+                iconFont: AppDesign.Typography.rowIcon
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .font(AppDesign.Typography.rowTitle)
                     .foregroundStyle(Color.white.opacity(0.88))
                 if let subtitle {
                     Text(subtitle)
@@ -750,16 +727,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             content()
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(strokeColor, lineWidth: 1)
-                )
-        )
+        .appElevatedCard(stroke: strokeColor)
     }
 
     @MainActor

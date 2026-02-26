@@ -45,12 +45,20 @@ struct AlcoholControlApp: App {
                 .task {
                     appDelegate.appState = appState
                     await PurchaseService.shared.restore()
+                    Task.detached(priority: .background) {
+                        await AlcoholInfoService.shared.warmupCatalogIfNeeded()
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                Task { await PurchaseService.shared.restore() }
+                Task {
+                    await PurchaseService.shared.restore()
+                }
+                Task.detached(priority: .background) {
+                    await AlcoholInfoService.shared.warmupCatalogIfNeeded()
+                }
             }
         }
     }

@@ -12,6 +12,10 @@ enum AppDesign {
         static let divider = Color(light: 0xE8E6E1, dark: 0x333634)
         static let success = Color(light: 0x81C784, dark: 0xA5D6A7)
         static let error = Color(light: 0xE57373, dark: 0xEF9A9A)
+
+        static let darkScreenTop = Color(red: 0.06, green: 0.08, blue: 0.08)
+        static let darkScreenMiddle = Color(red: 0.07, green: 0.10, blue: 0.09)
+        static let darkScreenBottom = Color(red: 0.08, green: 0.10, blue: 0.09)
     }
 
     enum Spacing {
@@ -26,6 +30,24 @@ enum AppDesign {
         static let sm: CGFloat = 8
         static let md: CGFloat = 16
         static let lg: CGFloat = 24
+        static let xl: CGFloat = 28
+        static let xxl: CGFloat = 30
+    }
+
+    enum Typography {
+        static let screenTitle = Font.system(size: 44, weight: .bold, design: .rounded)
+        static let sectionHeader = Font.system(.subheadline, design: .rounded).weight(.bold)
+        static let rowTitle = Font.system(.body, design: .rounded).weight(.semibold)
+        static let iconBadge = Font.system(size: 12, weight: .semibold)
+        static let rowIcon = Font.system(size: 16, weight: .semibold)
+    }
+
+    enum Gradients {
+        static let darkScreen = LinearGradient(
+            colors: [Colors.darkScreenTop, Colors.darkScreenMiddle, Colors.darkScreenBottom],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
@@ -86,9 +108,80 @@ struct AppSecondaryButtonStyle: ButtonStyle {
     }
 }
 
+struct AppIconBadge: View {
+    let icon: String
+    let size: CGFloat
+    let iconFont: Font
+    var fill: Color = Color.white.opacity(0.09)
+    var foreground: Color = Color.white.opacity(0.62)
+
+    var body: some View {
+        Circle()
+            .fill(fill)
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: icon)
+                    .font(iconFont)
+                    .foregroundStyle(foreground)
+            )
+    }
+}
+
+struct AppSectionHeader: View {
+    let title: String
+    var foreground: Color = Color.white.opacity(0.86)
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(AppDesign.Typography.sectionHeader)
+                .foregroundStyle(foreground)
+                .textCase(nil)
+            Spacer()
+        }
+    }
+}
+
+struct AppElevatedCardModifier: ViewModifier {
+    var fill: Color = Color.white.opacity(0.06)
+    var stroke: Color = Color.white.opacity(0.08)
+    var cornerRadius: CGFloat = AppDesign.Radius.xl
+    var padding: CGFloat = AppDesign.Spacing.md
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(fill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(stroke, lineWidth: 1)
+                    )
+            )
+    }
+}
+
 extension View {
     func appCard() -> some View {
         modifier(AppCardModifier())
+    }
+
+    func appElevatedCard(
+        fill: Color = Color.white.opacity(0.06),
+        stroke: Color = Color.white.opacity(0.08),
+        cornerRadius: CGFloat = AppDesign.Radius.xl,
+        padding: CGFloat = AppDesign.Spacing.md
+    ) -> some View {
+        modifier(
+            AppElevatedCardModifier(
+                fill: fill,
+                stroke: stroke,
+                cornerRadius: cornerRadius,
+                padding: padding
+            )
+        )
     }
 
     func appScreenBackground() -> some View {
@@ -104,5 +197,9 @@ extension View {
             )
             .ignoresSafeArea()
         )
+    }
+
+    func appDarkScreenBackground() -> some View {
+        background(AppDesign.Gradients.darkScreen.ignoresSafeArea())
     }
 }
