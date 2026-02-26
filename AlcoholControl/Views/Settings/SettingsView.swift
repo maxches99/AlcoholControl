@@ -170,14 +170,13 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.tr("Настройки"))
-                            .font(AppDesign.Typography.screenTitle)
-                            .foregroundStyle(Color.white.opacity(0.96))
-                        Text(L10n.tr("Настройте приложение под свои цели и ритм."))
-                            .font(.title3.weight(.medium))
-                            .foregroundStyle(Color.white.opacity(0.56))
-                    }
+                    Text(L10n.tr("Настройте приложение под свои цели и ритм."))
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(Color.white.opacity(0.56))
+                        .onTapGesture(count: 5) {
+                            debugMenuUnlocked = true
+                            statusMessage = L10n.tr("Debug меню разблокировано")
+                        }
 
                     Button {
                         showPaywall = true
@@ -613,20 +612,10 @@ struct SettingsView: View {
             }
             .appDarkScreenBackground()
             .tint(AppDesign.Colors.primary)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(L10n.tr("Настройки"))
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.black.opacity(0.28), for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("")
-                        .foregroundStyle(Color.white.opacity(0.92))
-                        .onTapGesture(count: 5) {
-                            debugMenuUnlocked = true
-                            statusMessage = L10n.tr("Debug меню разблокировано")
-                        }
-                }
-            }
             .task {
                 await loadInitialStateIfNeeded()
                 await purchase.restore()
